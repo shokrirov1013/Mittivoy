@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8">
+  <title>Mittivoy - Kirish</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    input, button { color: #1E2A33; }
+    body { margin: 0; height: 100vh; display: flex; font-family: 'Segoe UI', sans-serif; color: #1E2A33; background: #F4FBFC; overflow: hidden; }
+    #hero { width: 340px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: linear-gradient(160deg, #23A9B9 0%, #136F80 100%); color: #fff; overflow: hidden; }
+    #hero::before { content: ''; position: absolute; inset: 0; opacity: .14;
+      background: repeating-conic-gradient(from 45deg, #fff 0 25%, transparent 0 50%) 0 0 / 26px 26px; }
+    #hero::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 8px;
+      background: repeating-linear-gradient(90deg, #F2C14E 0 12px, #C2185B 12px 18px, #F2C14E 18px 24px, #1A9AAD 24px 30px); }
+    #hero h1 { position: relative; margin: 0; font-size: 40px; letter-spacing: .5px; text-shadow: 0 3px 0 rgba(0,0,0,.15); }
+    #hero .v { position: relative; font-size: 12px; background: #F2C14E; color: #5A3A00; padding: 2px 10px; border-radius: 10px; font-weight: 700; margin-top: 4px; }
+    #hero p { position: relative; margin: 10px 26px 0; text-align: center; font-size: 14px; opacity: .95; }
+    #duo { position: relative; display: flex; margin-top: 16px; }
+    #duo svg { width: 140px; height: 175px; overflow: visible; }
+    #main { flex: 1; padding: 44px 46px; overflow-y: auto; display: flex; flex-direction: column; justify-content: center; }
+    h2 { margin: 0 0 6px; font-size: 26px; color: #0E6472; }
+    .sub { color: #5F7A80; font-size: 14px; margin-bottom: 20px; }
+    label { display: block; font-size: 13.5px; margin: 12px 0 5px; color: #35525A; }
+    input { width: 100%; padding: 12px 14px; border: 1.5px solid #B8E3E9; border-radius: 12px; font: inherit; font-size: 15px; outline: none; background: #fff; }
+    input:focus { border-color: #1A9AAD; box-shadow: 0 0 0 3px rgba(43,179,192,.2); }
+    .btn { border: none; border-radius: 12px; padding: 12px 20px; font: inherit; font-size: 15px; cursor: pointer; }
+    .primary { background: linear-gradient(#2EC4D6, #158FA3); color: #fff; font-weight: 700; box-shadow: 0 4px 14px rgba(21,143,163,.35); width: 100%; margin-top: 18px; }
+    .primary:hover { filter: brightness(1.05); }
+    .primary:disabled { opacity: .6; }
+    .link { background: none; color: #158FA3; padding: 6px 0; font-size: 14px; text-decoration: underline; }
+    .google { background: #fff; border: 1.5px solid #DADCE0; color: #3C4043; font-weight: 600; width: 100%; margin-top: 10px; }
+    .row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; flex-wrap: wrap; gap: 6px; }
+    .err { color: #C62828; font-size: 13.5px; margin-top: 12px; min-height: 18px; }
+    .ok { color: #2E7D32; }
+    .hidden { display: none !important; }
+    .me { display: flex; align-items: center; gap: 14px; background: #fff; border: 2px solid #B8E3E9; border-radius: 18px; padding: 10px 16px; margin-bottom: 6px; }
+    .me svg { width: 74px; height: 92px; overflow: visible; }
+    .me b { font-size: 18px; } .me div div { font-size: 13px; color: #5F7A80; }
+  </style>
+</head>
+<body>
+  <div id="hero">
+    <h1>Mittivoy</h1>
+    <div class="v">2.5</div>
+    <p>Ekraningizda yashaydigan, o'zbekcha gapiradigan aqlli kichkina do'stingiz</p>
+    <div id="duo"></div>
+  </div>
+  <div id="main">
+    <!-- shu kompyuterda avval kirilgan hisob -->
+    <div id="vRemember" class="hidden">
+      <h2>Qaytganingizdan xursandmiz! 👋</h2>
+      <div class="sub">Shu kompyuterda avval kirgansiz. Davom etish uchun parolingizni kiriting.</div>
+      <div class="me"><span id="meChar"></span><div><b id="meName"></b><div id="meEmail"></div></div></div>
+      <label>Parol</label><input id="rPin" type="password" placeholder="Parolingiz">
+      <button class="btn primary" id="rGo">Davom etish ▶</button>
+      <div class="row"><button class="btn link" id="rOther">Boshqa hisob bilan kirish</button><button class="btn link" id="rForgot">Parolni unutdingizmi?</button></div>
+      <div class="err" id="rErr"></div>
+    </div>
+
+    <!-- email bilan kirish -->
+    <div id="vSignin" class="hidden">
+      <h2>Kirish</h2>
+      <div class="sub">Hisobingizga email va parol bilan kiring.</div>
+      <label>Email</label><input id="sEmail" type="email" placeholder="ism@gmail.com" autocomplete="username">
+      <label>Parol</label><input id="sPin" type="password" placeholder="Parolingiz" autocomplete="current-password">
+      <button class="btn primary" id="sGo">Kirish ▶</button>
+      <div id="gWrap1"></div>
+      <div class="row"><button class="btn link" id="toUp">Hisobingiz yo'qmi? Ro'yxatdan o'ting</button><button class="btn link" id="sForgot">Parolni unutdingizmi?</button></div>
+      <div class="err" id="sErr"></div>
+    </div>
+
+    <!-- ro'yxatdan o'tish -->
+    <div id="vSignup" class="hidden">
+      <h2>Ro'yxatdan o'tish ✨</h2>
+      <div class="sub">Bir daqiqada tayyor. Keyin shu kompyuterda qayta so'ralmaydi.</div>
+      <label>Ismingiz</label><input id="uName" placeholder="masalan: Muhammad">
+      <label>Email</label><input id="uEmail" type="email" placeholder="ism@gmail.com" autocomplete="username">
+      <label>Parol (kamida 4 belgi)</label><input id="uPin" type="password" autocomplete="new-password">
+      <label>Parolni takrorlang</label><input id="uPin2" type="password" autocomplete="new-password">
+      <button class="btn primary" id="uGo">Boshlash ▶</button>
+      <div id="gWrap2"></div>
+      <div class="row"><button class="btn link" id="toIn">Hisobim bor - kirish</button></div>
+      <div class="err" id="uErr"></div>
+    </div>
+  </div>
+  <script src="character.js"></script>
+  <script src="login.js"></script>
+</body>
+</html>

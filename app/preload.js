@@ -1,0 +1,46 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('kapi', {
+  getConfig: () => ipcRenderer.invoke('get-config'),
+  setIgnore: v => ipcRenderer.send('set-ignore', v),
+  focus: () => ipcRenderer.send('focus-pet'),
+  ask: (id, text) => ipcRenderer.send('ask', { id, text }),
+  cancel: () => ipcRenderer.send('cancel'),
+  saveNeeds: n => ipcRenderer.send('save-needs', n),
+  openUrl: u => ipcRenderer.send('open-url', u),
+  openApp: n => ipcRenderer.invoke('open-app', n),
+  addReminder: (minutes, text) => ipcRenderer.send('add-reminder', { minutes, text }),
+  resetChat: () => ipcRenderer.send('reset-chat'),
+  openSettings: () => ipcRenderer.send('open-settings'),
+  login: () => ipcRenderer.send('login'),
+  menu: info => ipcRenderer.send('menu', info),
+  hide: () => ipcRenderer.send('hide-pet'),
+  quit: () => ipcRenderer.send('quit'),
+  log: s => ipcRenderer.send('log', String(s)),
+  on: (ch, cb) => ipcRenderer.on(ch, (e, d) => cb(d)),
+  // kirish oynasi va profillar
+  authState: () => ipcRenderer.invoke('auth-state'),
+  authLogin: (id, pin) => ipcRenderer.invoke('auth-login', { id, pin }),
+  authSignin: (email, pin) => ipcRenderer.invoke('auth-signin', { email, pin }),
+  ride: id => ipcRenderer.send('ride', id),
+  authCreate: d => ipcRenderer.invoke('auth-create', d),
+  authGoogle: () => ipcRenderer.invoke('auth-google'),
+  authQuit: () => ipcRenderer.send('auth-quit'),
+  logout: () => ipcRenderer.send('logout'),
+  // xotira
+  memoryGet: () => ipcRenderer.invoke('memory-get'),
+  memoryDelete: i => ipcRenderer.invoke('memory-delete', i),
+  memoryClear: () => ipcRenderer.invoke('memory-clear'),
+  // hisoblarni ulash
+  claudeStatus: () => ipcRenderer.invoke('claude-status'),
+  connectClaude: email => ipcRenderer.invoke('connect-claude', email),
+  authCode: c => ipcRenderer.send('auth-code', c),
+  connectGemini: () => ipcRenderer.invoke('connect-gemini'),
+  testGemini: k => ipcRenderer.invoke('test-gemini', k),
+  // sozlamalar oynasi
+  settingsGet: () => ipcRenderer.invoke('settings-get'),
+  findClaude: () => ipcRenderer.invoke('find-claude'),
+  settingsSave: c => ipcRenderer.send('settings-save', c),
+  settingsCancel: () => ipcRenderer.send('settings-cancel'),
+  openExternal: u => ipcRenderer.send('open-external', u),
+});

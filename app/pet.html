@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8">
+  <title>Mittivoy</title>
+  <link rel="stylesheet" href="pet.css">
+</head>
+<body>
+  <div id="stage">
+    <div id="fx"></div>
+    <div id="ball" class="hit hidden">⚽</div>
+    <div id="pet"><div id="hit" class="hit"></div></div>
+    <div id="emote"></div>
+    <div id="thought" class="hidden"></div>
+    <div id="bubble" class="hit hidden">
+      <div id="bhead"><span id="bname"></span><span id="bsrc"></span></div>
+      <div id="btext"></div>
+      <div id="bstatus" class="hidden"></div>
+      <div id="brow">
+        <input id="binput" type="text" maxlength="4000" placeholder="Shu yerga yozing va Enter bosing..." autocomplete="off" spellcheck="false">
+        <button id="bsend" title="Yuborish">➤</button>
+        <button id="bstop" class="hidden" title="To'xtatish">■</button>
+        <button id="bclose" title="Yopish">✕</button>
+      </div>
+    </div>
+  </div>
+  <script src="character.js"></script>
+  <script src="pet.js"></script>
+</body>
+</html>

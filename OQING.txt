@@ -1,0 +1,57 @@
+MITTIVOY 2.5 - o'zbekcha AI yordamchi (Windows uchun)
+=====================================================
+
+Ekraningizda yashaydigan kichkina qizaloq yoki bolakay: sayr qiladi, oynalar ustiga chiqib
+o'tiradi, o'ynaydi, hissiyotlari va fe'li bor, siz bilan o'zbek tilida gaplashadi.
+
+
+O'RNATISH
+---------
+1. ZIP faylni o'ng tugma bilan bosing -> "Extract All" (Hammasini chiqarish).
+   (ZIP ichidan to'g'ridan-to'g'ri ochmang - avval chiqaring!)
+2. Ochilgan "Mittivoy" papkasidagi Mittivoy.exe ni ikki marta bosing.
+   - Windows ogohlantirsa: "More info" (Batafsil) -> "Run anyway" (Baribir ishga tushirish).
+3. "O'rnatish" ni bosing. Ish stoli va Start menyusida "Mittivoy" yorlig'i paydo bo'ladi,
+   Windows yoqilganda o'zi fonda ishga tushadi. Yuklab olingan papkani endi o'chirsangiz bo'ladi.
+4. Ro'yxatdan o'ting (ism, email, parol). Shu kompyuterda qayta so'ralmaydi -
+   faqat "Profildan chiqish" bosilsa yoki dastur o'chirib qayta o'rnatilsa so'raydi.
+
+
+BEPUL VA DARHOL BAJARADIGAN ISHLARI (internet bo'lsa yetarli, hisob shart emas)
+------------------------------------------------------------------------------
+  "Yulduz Usmonovaning qo'shig'ini qo'y" ... YouTube'dan topib, o'zi qo'yadi
+  "Toshkent ob-havosi qanday?" .............. hozirgi ob-havo
+  "Dollar kursi" / "100 dollar necha so'm" .. Markaziy bank kursi
+  "125*48 nechchi?" ......................... kalkulyator
+  "Telegramni och", "YouTube och" ........... dastur va saytlarni ochadi
+  "10 daqiqadan keyin choy ichishni eslat" .. eslatma
+  "Buni eslab qol: tug'ilgan kunim 5-may" ... doimiy xotira
+  "Latifa aytib ber" ........................ kuldiradi
+
+
+AQLLIROQ BO'LISHI UCHUN (Sozlamalar -> "Hisobga kirish")
+--------------------------------------------------------
+  - Gemini (bepul): oddiy suhbatga juda tez javob beradi. Google AI Studio'da
+    "Create API key" -> Copy. Mittivoy kalitni o'zi topib saqlaydi.
+  - Claude: kompyuterda murakkab ishlarni bajaradi (Telegram'da kontaktga yozish,
+    ilovalar ichida ishlash, fayllar, hisob-kitob, algoritm). Claude Pro/Max hisobi kerak.
+
+
+FE'LI VA HISSIYOTLARI
+---------------------
+  So'ksangiz - xafa bo'lib arazlaydi, uzr so'ramaguningizcha arazlab yuradi.
+  Kuldirsangiz - qotib-qotib kuladi. Maqtasangiz - uyaladi. Boshini silasangiz - xursand.
+  Charchasa uxlaydi, zerikib qolsa o'ynashga chaqiradi, hol-ahvol so'raydi.
+
+
+U BILAN MUOMALA
+---------------
+  Bir marta bosish ........ gaplashish        Ikki marta bosish ... qitiqlash
+  Sudrab otish ............ uchib ketadi       O'ng tugma .......... menyu (o'yinlar, kiyimlar...)
+
+
+O'CHIRISH
+---------
+Windows Sozlamalari -> Ilovalar (Apps) -> "Mittivoy" -> O'chirish (Uninstall).
+
+Yuklab olish: https://github.com/shokrirov1013/Mittivoy/releases

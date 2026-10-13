@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8">
+  <title>Mittivoy - Sozlamalar</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    input, select, textarea, button { color: #3A2A1A; }
+    body { margin: 0; font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #FFF8EC 0%, #FFEFD6 100%); color: #3A2A1A; height: 100vh; display: flex; }
+    #form { flex: 1; padding: 22px 26px 90px; overflow-y: auto; }
+    #side { width: 300px; background: linear-gradient(180deg, #D3F3F7, #82D9E3); display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; }
+    #side::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 50% 70%, rgba(255,255,255,.55), transparent 60%); }
+    h1 { margin: 0 0 4px; font-size: 26px; color: #0E6472; }
+    .sub { color: #8A7560; margin-bottom: 14px; font-size: 14px; }
+    h2 { font-size: 15px; color: #158FA3; margin: 20px 0 8px; text-transform: uppercase; letter-spacing: .6px; }
+    label { display: block; font-size: 13.5px; margin: 8px 0 4px; color: #5A4632; }
+    input[type=text], input[type=password], select { width: 100%; padding: 9px 11px; border: 1.5px solid #9FDDE5; border-radius: 11px; font: inherit; font-size: 14px; background: #fff; outline: none; }
+    input:focus, select:focus { border-color: #148A9B; box-shadow: 0 0 0 3px rgba(43,179,192,.22); }
+    .row { display: flex; gap: 12px; } .row > div { flex: 1; }
+    .cards { display: flex; gap: 10px; flex-wrap: wrap; }
+    .card { flex: 1; min-width: 110px; padding: 10px 8px; border: 2px solid #EBD3A8; border-radius: 14px; background: #fff; text-align: center; cursor: pointer; font-size: 13.5px; transition: .12s; }
+    .card:hover { transform: translateY(-1px); border-color: #E2B055; }
+    .card.on { border-color: #1FA2B5; background: #E6F8FA; box-shadow: 0 3px 10px rgba(224,138,18,.2); font-weight: 600; }
+    .card .ic { font-size: 24px; display: block; }
+    .note { font-size: 12.5px; color: #8A7560; margin-top: 5px; line-height: 1.4; }
+    .chk { display: flex; gap: 9px; align-items: flex-start; margin: 10px 0; font-size: 14px; cursor: pointer; }
+    .chk input { margin-top: 3px; width: 17px; height: 17px; accent-color: #1FA2B5; }
+    .btn { border: none; border-radius: 12px; padding: 9px 16px; font: inherit; font-size: 14px; cursor: pointer; background: #fff; border: 1.5px solid #9FDDE5; color: #6B3A08; }
+    .btn:hover { background: #FFF6E6; }
+    .primary { background: linear-gradient(#2EC4D6, #158FA3); border: none; font-weight: 700; color: #FFFFFF; padding: 11px 28px; font-size: 15px; box-shadow: 0 4px 12px rgba(21,143,163,.4); }
+    .primary:hover { filter: brightness(1.05); background: linear-gradient(#2EC4D6, #158FA3); }
+    #bar { position: fixed; left: 0; right: 300px; bottom: 0; padding: 14px 26px; background: rgba(255,248,236,.95); border-top: 1px solid #F0DDBB; display: flex; justify-content: flex-end; gap: 10px; }
+    #ok { font-size: 12.5px; margin-top: 5px; }
+    #prevName { font-size: 24px; font-weight: 800; color: #0E6472; position: relative; margin-bottom: 10px; text-shadow: 0 2px 0 rgba(255,255,255,.6); }
+    #prev { position: relative; width: 220px; height: 275px; }
+    #prev svg { width: 220px; height: 275px; overflow: visible; filter: drop-shadow(0 4px 4px rgba(0,0,0,.2)); }
+    #moods { position: relative; display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-top: 12px; padding: 0 14px; }
+    #moods span { font-size: 11px; background: rgba(255,255,255,.7); padding: 3px 8px; border-radius: 10px; cursor: pointer; }
+    #moods span:hover { background: #fff; }
+    a { color: #C06A0A; cursor: pointer; text-decoration: underline; }
+    .acc { background: #fff; border: 1.5px solid #F0D9B0; border-radius: 16px; padding: 4px 14px 12px; }
+    .chips { display: flex; gap: 10px; margin-top: 10px; }
+    .chip { flex: 1; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: #FFF6E6; border: 1.5px solid #F0D9B0; font-size: 13px; }
+    .chip span { flex: 1; color: #8A7560; }
+    .chip.on { background: #EAF7EA; border-color: #9CD39C; } .chip.on span { color: #2E7D32; font-weight: 600; }
+    .chip.on .mini { display: none; }
+    .mini { padding: 4px 10px !important; font-size: 12.5px !important; }
+    .hidden { display: none !important; }
+    .mem { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #F0DDBB; border-radius: 10px; padding: 6px 10px; margin: 4px 0; font-size: 13.5px; }
+    .mem span { flex: 1; } .mem button { border: none; background: none; cursor: pointer; color: #C62828; font-size: 15px; }
+  </style>
+</head>
+<body>
+  <div id="form">
+    <h1 id="title">Sozlamalar</h1>
+    <div class="sub" id="subtitle">Yordamchingizni o'zingizga moslang</div>
+
+    <h2>Tanishuv</h2>
+    <div class="row">
+      <div><label>Sizning ismingiz</label><input id="UserName" type="text" placeholder="masalan: Shoxrux"></div>
+      <div><label>Yordamchining ismi</label><input id="PetName" type="text" placeholder="masalan: Zebo, Lola, Anvar"></div>
+    </div>
+    <label>Kim bo'lsin?</label>
+    <div class="cards" data-key="Gender">
+      <div class="card" data-v="girl"><span class="ic">👧</span>Qizaloq</div>
+      <div class="card" data-v="boy"><span class="ic">👦</span>Bolakay</div>
+    </div>
+
+    <h2>Kiyim va qiyofa</h2>
+    <div class="cards" data-key="Outfit">
+      <div class="card" data-v="zamonaviy"><span class="ic">✨</span>Zamonaviy 2026</div>
+      <div class="card" data-v="milliy"><span class="ic">🎩</span>Milliy (do'ppi)</div>
+      <div class="card" data-v="oddiy"><span class="ic">👕</span>Oddiy</div>
+      <div class="card" data-v="sport"><span class="ic">⚽</span>Sport</div>
+      <div class="card" data-v="qishki"><span class="ic">🧣</span>Qishki</div>
+      <div class="card" data-v="bayram"><span class="ic">🎉</span>Bayram</div>
+    </div>
+    <div class="row">
+      <div><label>Teri rangi</label><select id="Skin"><option value="och">Oq-sariq</option><option value="orta">O'rta</option><option value="qora">Qoramag'iz</option></select></div>
+      <div><label>Soch rangi</label><select id="Hair"><option value="qora">Qora</option><option value="jigar">Jigarrang</option><option value="malla">Malla</option></select></div>
+    </div>
+
+    <h2>Sun'iy intellekt (miya)</h2>
+    <label>Ishlash rejimi</label>
+    <select id="Provider">
+      <option value="auto">🧠⚡ Aqlli: suhbat - Gemini (tez), ish va hisob-kitob - Claude (tavsiya)</option>
+      <option value="claude">🧠 Hammasi Claude orqali</option>
+      <option value="gemini">✨ Hammasi Gemini orqali (faqat suhbat)</option>
+      <option value="groq">🚀 Hammasi Groq orqali (faqat suhbat)</option>
+      <option value="bepul">🆓 Kalitsiz bepul server (faqat suhbat)</option>
+    </select>
+    <div class="note">Aqlli rejimda oddiy gap-so'z, hol-ahvol va hazillarga Gemini darhol javob beradi. Dastur ochish, Telegram'ga yozish, fayllar, hisob-kitob, algoritm, kod va internetdan ma'lumot kerak bo'lsa - Claude o'zi kompyuterda bajaradi. Gemini kaliti bo'lmasa, suhbat kalitsiz bepul serverda bo'ladi.</div>
+
+    <h2>🔐 Hisoblarga ulanish</h2>
+    <div class="acc">
+      <label>Emailingiz</label>
+      <div class="row" style="align-items:center">
+        <div style="flex:3"><input id="accEmail" type="text" placeholder="ism@gmail.com"></div>
+        <div style="flex:none"><button class="btn primary" id="connectAll" style="padding:10px 18px">🔑 Hisobga kirish</button></div>
+      </div>
+      <div class="chips">
+        <div class="chip" id="chipClaude"><b>🧠 Claude</b><span id="stClaude">tekshirilmoqda...</span><button class="btn mini" id="connClaude">Ulash</button></div>
+        <div class="chip" id="chipGemini"><b>✨ Gemini</b><span id="stGemini">...</span><button class="btn mini" id="connGemini">Ulash</button></div>
+      </div>
+      <div id="authLog" class="note hidden"></div>
+      <div id="codeRow" class="row hidden" style="align-items:center">
+        <div style="flex:3"><input id="authCode" type="text" placeholder="Brauzer bergan kodni shu yerga qo'ying"></div>
+        <div style="flex:none"><button class="btn" id="sendCode">Yuborish</button></div>
+      </div>
+      <div class="note">"Hisobga kirish" bosilganda: 1) brauzerda Claude kirish sahifasi emailingiz bilan ochiladi - tasdiqlang; 2) so'ng Google AI Studio ochiladi - "Create API key" ni bosib, kalitni nusxalang (Copy). Mittivoy kalitni o'zi topib, tekshirib, saqlaydi.</div>
+    </div>
+
+    <details style="margin-top:10px">
+      <summary style="cursor:pointer;color:#8A7560;font-size:13px">Qo'shimcha (qo'lda kiritish)</summary>
+      <label>Claude Code yo'li</label>
+      <div class="row" style="align-items:center">
+        <div style="flex:3"><input id="ClaudePath" type="text" placeholder="bo'sh qolsa - avtomatik topiladi"></div>
+        <div style="flex:none"><button class="btn" id="find">Topish</button></div>
+        <div style="flex:none"><button class="btn" id="login">Terminal orqali kirish</button></div>
+      </div>
+      <div id="ok"></div>
+      <div class="row">
+        <div><label>Gemini kaliti · <a data-url="https://aistudio.google.com/apikey">kalit olish ↗</a></label><input id="GeminiKey" type="password" placeholder="AIza..."></div>
+        <div><label>Groq kaliti (ixtiyoriy) · <a data-url="https://console.groq.com/keys">kalit olish ↗</a></label><input id="GroqKey" type="password" placeholder="gsk_..."></div>
+      </div>
+    </details>
+
+    <h2>Xulq-atvor</h2>
+    <label class="chk"><input type="checkbox" id="FullAccess"><span><b>To'liq mustaqillik</b> - Claude kompyuterda ruxsat so'ramasdan ish bajaradi (dastur ochish, xabar yozish, fayllar...). O'chirish kabi xavfli ishlardan oldin baribir so'raydi.</span></label>
+    <label class="chk"><input type="checkbox" id="Chatty"><span>O'zi gap boshlab, hol-ahvol so'rab tursin</span></label>
+    <label class="chk"><input type="checkbox" id="Autostart"><span>Windows yoqilganda avtomatik ishga tushsin</span></label>
+
+    <h2>🧠 Xotira</h2>
+    <div class="note" style="margin-bottom:6px">Yordamchingiz siz haqingizda eslab qolgan narsalar. Unga "buni eslab qol: ..." deb ayting yoki o'zi muhim narsalarni eslab qoladi.</div>
+    <div id="memList"></div>
+    <div class="row" style="margin-top:6px"><div style="flex:none"><button class="btn" id="memClear">🗑 Xotirani tozalash</button></div></div>
+  </div>
+
+  <div id="side">
+    <div id="prevName"></div>
+    <div id="prev"></div>
+    <div id="moods"></div>
+  </div>
+
+  <div id="bar">
+    <button class="btn" id="logout" style="margin-right:auto">👤 <span id="who"></span> · profildan chiqish</button>
+    <button class="btn" id="cancel">Bekor qilish</button>
+    <button class="btn primary" id="save">Saqlash</button>
+  </div>
+
+  <script src="character.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>

@@ -1,1 +1,53 @@
-# Mittivoy
+# Mittivoy 2.5 🇺🇿
+
+**O'zbekcha AI yordamchi — ekraningizda yashaydigan kichkina do'st (Windows uchun)**
+
+Mittivoy — milliy kiyimdagi kichkina qizaloq yoki bolakay. U ekraningizda sayr qiladi, oynalar ustiga chiqib o'tiradi,
+o'ynaydi, his-tuyg'ulari va fe'li bor, siz bilan **o'zbek tilida** gaplashadi va kompyuterda ishlaringizni bajaradi.
+
+![Mittivoy qahramonlari](docs/kiyimlar.png)
+
+## ⬇️ Yuklab olish
+
+**[Mittivoy-2.5-Windows.zip ni yuklab olish](https://github.com/shokrirov1013/Mittivoy/releases/latest)**
+
+1. ZIP'ni o'ng tugma bilan bosing → **Extract All** (Hammasini chiqarish).
+2. `Mittivoy` papkasidagi **Mittivoy.exe** ni ikki marta bosing → **O'rnatish**.
+   Windows ogohlantirsa: **More info → Run anyway**.
+3. Ro'yxatdan o'ting — tayyor! Windows yoqilganda o'zi fonda ishga tushadi.
+
+## ✨ Imkoniyatlar
+
+| | |
+|---|---|
+| 🎵 **Qo'shiq qo'yish** | "Yulduz Usmonovaning qo'shig'ini qo'y" — YouTube'dan topib o'zi qo'yadi |
+| 🌤 **Ob-havo** | "Samarqand ob-havosi qanday?" |
+| 💱 **Valyuta kursi** | "Dollar kursi", "100 dollar necha so'm" (Markaziy bank) |
+| 🧮 **Kalkulyator** | "125*48 nechchi?" |
+| 🚀 **Dastur ochish** | "Telegramni och", "YouTube och" — imlo xatolarini ham tushunadi |
+| ⏰ **Eslatmalar** | "10 daqiqadan keyin choy ichishni eslat" |
+| 🧠 **Xotira** | Siz haqingizdagi muhim narsalarni eslab qoladi |
+| 🤖 **Aqlli rejim** | Oddiy suhbat — Gemini (tez, bepul), murakkab ishlar — Claude (kompyuterni boshqaradi) |
+| 🪟 **Oynalar ustida** | Oynalarga chiqadi, chetida o'tiradi, oyna bilan birga yuradi |
+| 🎮 **O'yinlar** | To'p, sovun pufaklari, quvlashmachoq, raqs, umbaloq |
+| 💕 **Fe'l-atvor** | So'ksangiz arazlaydi, kuldirsangiz kuladi, maqtasangiz uyaladi |
+| 👤 **Hisoblar** | Har kim o'z hisobi bilan; bir kompyuterda bir marta kirasiz |
+
+Yuqoridagi tezkor ishlarning barchasi **bepul** va AI serversiz darhol bajariladi.
+
+![Kirish oynasi](docs/kirish.png)
+
+## 🛠 Manba kodidan yig'ish
+
+Ilova [Electron](https://www.electronjs.org/) asosida: `app/` papkasi — ilova kodi, `scripts/build-app.ps1` — tayyor ZIP yig'uvchi skript.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build-app.ps1 -Src .
+```
+
+Rasmiy Electron dvigateli o'zgartirilmagan holda ishlatiladi, shuning uchun Windows Smart App Control yoqilgan kompyuterlarda ham ishlaydi.
+
+## 🔒 Maxfiylik
+
+Hisoblar, sozlamalar va xotira faqat sizning kompyuteringizda saqlanadi (`%APPDATA%\Mittivoy`).
+API kalitlar (Gemini, Groq) hech qayerga yuborilmaydi va manba kodida yo'q.
