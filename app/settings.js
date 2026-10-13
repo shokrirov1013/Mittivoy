@@ -34,7 +34,10 @@
       a.addEventListener('click', () => api.openExternal(d.url));
       $('authLog').appendChild(a);
     } else if (d.text) authLog(d.text);
-    if (d.text && /code|kod/i.test(d.text)) $('codeRow').classList.remove('hidden');
+    if (d.text && /code|kod/i.test(d.text)) {
+      $('codeRow').classList.remove('hidden');
+      if (/invalid code/i.test(d.text)) authLog("Kod noto'g'ri qo'yildi. Brauzerdagi kodni oxirigacha to'liq nusxalang (\"Copy Code\" tugmasi bilan) va qaytadan qo'ying. Bo'lmasa, \"Terminal orqali kirish\" tugmasini bosing.");
+    }
   });
   $('sendCode').addEventListener('click', () => { api.authCode($('authCode').value); $('authCode').value = ''; });
 

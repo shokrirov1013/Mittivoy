@@ -47,10 +47,20 @@ function regAdd(name, type, value) {
 function makeShortcuts(dir) {
   const exe = path.join(dir, 'Mittivoy.exe'), icon = path.join(dir, 'resources', 'app', 'assets', 'icon.ico');
   const startMenu = path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs');
-  const base = { target: exe, cwd: dir, icon, iconIndex: 0, appUserModelId: 'uz.mittivoy.yordamchi' };
-  shell.writeShortcutLink(path.join(app.getPath('desktop'), 'Mittivoy.lnk'), 'replace', Object.assign({ description: "Mittivoy - o'zbekcha AI yordamchi" }, base));
-  shell.writeShortcutLink(path.join(startMenu, 'Mittivoy.lnk'), 'replace', Object.assign({ description: "Mittivoy - o'zbekcha AI yordamchi" }, base));
-  shell.writeShortcutLink(path.join(startMenu, 'Mittivoy sozlamalari.lnk'), 'replace', Object.assign({ description: 'Mittivoy sozlamalari', args: '--sozlamalar' }, base));
+  const links = [[path.join(app.getPath('desktop'), 'Mittivoy.lnk'), ''], [path.join(startMenu, 'Mittivoy.lnk'), ''], [path.join(startMenu, 'Mittivoy sozlamalari.lnk'), '--sozlamalar']];
+  for (const [lnk, args] of links) {
+    let ok = false;
+    try { ok = shell.writeShortcutLink(lnk, fs.existsSync(lnk) ? 'replace' : 'create', { target: exe, cwd: dir, icon, iconIndex: 0, args, description: "Mittivoy - o'zbekcha AI yordamchi" }); } catch (e) { }
+    if (!ok || !fs.existsSync(lnk)) {
+      // zaxira usul: Windows'ning o'z WScript.Shell vositasi
+      const q = s => "'" + String(s).replace(/'/g, "''") + "'";
+      try {
+        require('child_process').execFileSync('powershell.exe', ['-NoProfile', '-Command',
+          `$s=(New-Object -ComObject WScript.Shell).CreateShortcut(${q(lnk)}); $s.TargetPath=${q(exe)}; $s.Arguments=${q(args)}; $s.WorkingDirectory=${q(dir)}; $s.IconLocation=${q(icon + ',0')}; $s.Description='Mittivoy'; $s.Save()`],
+          { windowsHide: true, timeout: 20000 });
+      } catch (e) { }
+    }
+  }
   regAdd('DisplayName', 'REG_SZ', 'Mittivoy');
   regAdd('DisplayVersion', 'REG_SZ', VERSION);
   regAdd('Publisher', 'REG_SZ', 'Mittivoy');
