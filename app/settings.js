@@ -106,7 +106,8 @@
     if (r.ok) {
       c[id] = k;
       badge(name, 'on', '✓ Ishlayapti');
-      result(name, 'on', (r.warn ? '✓ ' + r.warn : `✓ Kalit ishlayapti! Javob ${secs(r.ms)}da keldi.`) + (r.saved ? ' Kalit saqlandi - Mittivoy undan foydalanyapti.' : ''));
+      const via = { openai: 'Google AI Studio', native: 'Gemini API', vertex: 'Vertex AI' }[r.kind];
+      result(name, 'on', (r.warn ? '✓ ' + r.warn : `✓ Kalit ishlayapti${via ? ' (' + via + ' orqali)' : ''}! Javob ${secs(r.ms)}da keldi.`) + (r.saved ? ' Kalit saqlandi - Mittivoy undan foydalanyapti.' : ''));
       $('del' + name).classList.remove('hidden');
       if (which === 'claude') { await refreshClaude(); badge('Claude', 'on', '✓ Ishlayapti'); }
     } else {

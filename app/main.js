@@ -77,7 +77,7 @@ function cleanupOldKichkintoy() {
 }
 
 // ===================================================================== o'zini o'rnatish / o'chirish (tayyor ilova rejimi)
-const VERSION = '2.7.0';
+const VERSION = '2.7.1';
 const INSTALL_DIR = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Mittivoy');
 const PACKAGED = !process.defaultApp;                       // resources\app ichidan ishlayapti
 const EXE_DIR = path.dirname(process.execPath);
@@ -274,7 +274,7 @@ function saveMemory() { if (PDIR) { writeJson(path.join(PDIR, 'memory.json'), me
 // ===================================================================== bulutli hisob (Supabase)
 const { Cloud } = require('./cloud');
 let cloud = null;   // app tayyor bo'lganda yaratiladi (safeStorage kerak)
-const SYNC_KEYS = ['UserName', 'PetName', 'Gender', 'Outfit', 'Skin', 'Hair', 'Provider', 'Model', 'FullAccess', 'Chatty', 'Autostart', 'AutoUpdate', 'Needs', 'Reminders'];
+const SYNC_KEYS = ['UserName', 'PetName', 'Gender', 'Outfit', 'Skin', 'Hair', 'Provider', 'Model', 'FullAccess', 'Chatty', 'Autostart', 'AutoUpdate', 'Needs', 'Reminders', 'GeminiKind'];
 const SECRET_KEYS = ['GeminiKey', 'GroqKey', 'ClaudeKey'];   // bulutda parolingiz bilan shifrlangan holda saqlanadi
 function collectData() {
   const c = {}; for (const k of SYNC_KEYS) if (cfg && k in cfg) c[k] = cfg[k];
@@ -814,21 +814,41 @@ const FREE = {
 };
 const skills = require('./skills');
 
-// Google Vertex AI "Express" kalitlari ("AQ." bilan boshlanadi) - boshqa manzil va so'rov formati
-const VERTEX_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest'];
+// Gemini kalitlari uch xil yo'l bilan ishlaydi (tekshiruvda qaysi biri ishlasa - o'shani eslab qolamiz):
+//  'openai' - AI Studio "AIza..." kaliti, OpenAI-mos manzil (eng tez yo'l)
+//  'native' - Gemini API (generativelanguage.googleapis.com), x-goog-api-key sarlavhasi bilan:
+//             AI Studio'ning yangi "AQ." formatdagi kalitlari ham shu yerda ishlaydi
+//  'vertex' - Google Cloud Vertex AI "Express" kaliti (aiplatform.googleapis.com) - "Vertex AI API" yoqilgan bo'lishi kerak
+const GOOGLE_MODELS = { native: ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash'], vertex: ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest'] };
+const geminiKinds = new Map();
 function isVertexKey(key) { return /^AQ\./.test(String(key || '').trim()); }
-async function streamVertex(key, messages, onChunk, signal) {
+function geminiKind(key) {
+  key = String(key || '').trim();
+  if (geminiKinds.has(key)) return geminiKinds.get(key);
+  if (cfg && cfg.GeminiKey === key && cfg.GeminiKind) return cfg.GeminiKind;
+  return isVertexKey(key) ? 'vertex' : 'openai';
+}
+function googleFetch(kind, model, key, body, stream, signal) {
+  key = String(key).trim();
+  const vertex = kind === 'vertex';
+  let url = (vertex ? 'https://aiplatform.googleapis.com/v1/publishers/google/models/' : 'https://generativelanguage.googleapis.com/v1beta/models/') + model + (stream ? ':streamGenerateContent?alt=sse' : ':generateContent');
+  if (vertex) url += (stream ? '&' : '?') + 'key=' + encodeURIComponent(key);   // Vertex Express hujjatidagi usul
+  return fetch(url, {
+    method: 'POST', signal,
+    headers: vertex ? { 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify(body),
+  });
+}
+async function streamVertex(key, messages, onChunk, signal, kind) {
+  kind = kind || geminiKind(key);
   const sys = messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n');
   const contents = messages.filter(m => m.role !== 'system').map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: String(m.content) }] }));
   let lastErr = '';
-  for (const model of VERTEX_MODELS) {
+  for (const model of GOOGLE_MODELS[kind === 'vertex' ? 'vertex' : 'native']) {
     let got = '';
     try {
-      const res = await fetch(`https://aiplatform.googleapis.com/v1/publishers/google/models/${model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(key.trim())}`, {
-        method: 'POST', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(45000)]) : AbortSignal.timeout(45000),
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents, systemInstruction: sys ? { parts: [{ text: sys }] } : undefined, generationConfig: { temperature: 0.8 } }),
-      });
+      const res = await googleFetch(kind, model, key, { contents, systemInstruction: sys ? { parts: [{ text: sys }] } : undefined, generationConfig: { temperature: 0.8 } }, true,
+        signal ? AbortSignal.any([signal, AbortSignal.timeout(45000)]) : AbortSignal.timeout(45000));
       if (!res.ok) {
         lastErr = res.status + ' ' + (await res.text()).slice(0, 1500);
         if (res.status === 401 || res.status === 403) break;   // kalit/loyiha darajasidagi xato - boshqa model ham baribir ishlamaydi
@@ -863,7 +883,14 @@ async function streamVertex(key, messages, onChunk, signal) {
 }
 
 async function streamChat(name, key, messages, onChunk, signal) {
-  if (name === 'gemini' && isVertexKey(key)) return streamVertex(key, messages, onChunk, signal);
+  if (name === 'gemini' && geminiKind(key) !== 'openai') {
+    try { return await streamVertex(key, messages, onChunk, signal); }
+    catch (e) {
+      // yo'li hali aniqlanmagan "AQ." kalit: Vertex bo'lmasa - Gemini API orqali urinib ko'ramiz
+      if (isVertexKey(key) && !geminiKinds.has(key) && !(cfg && cfg.GeminiKind) && !(signal && signal.aborted)) return streamVertex(key, messages, onChunk, signal, 'native');
+      throw e;
+    }
+  }
   const P = FREE[name];
   let lastErr = '';
   for (const model of P.models) {
@@ -1207,7 +1234,7 @@ async function ask(id, text) {
     if (km) {
       send('status', { tool: 'start' });
       const r = await checkGeminiKey(km[0]);
-      if (r.ok) { cfg.GeminiKey = km[0]; saveConfig(); return send('done', { text: "[kayfiyat:xursand] [harakat:sakra] Gemini ulandi! ✨ Endi suhbatlarga ancha tez javob beraman. (Kalitni xavfsiz saqladim, uni hech kimga ko'rsatmayman.)", source: 'tez' }); }
+      if (r.ok) { setGeminiKey(km[0]); return send('done', { text: "[kayfiyat:xursand] [harakat:sakra] Gemini ulandi! ✨ Endi suhbatlarga ancha tez javob beraman. (Kalitni xavfsiz saqladim, uni hech kimga ko'rsatmayman.)", source: 'tez' }); }
       return send('done', { text: '[kayfiyat:hafa] Gemini kalitini ulab bo\'lmadi 😟\n' + r.err, source: 'tez' });
     }
     const quick = await quickIntent(text);
@@ -1383,7 +1410,9 @@ ipcMain.handle('find-claude', () => findClaude(''));
 ipcMain.on('settings-save', (e, c) => {
   if (!cfg) return;
   const keys = ['UserName', 'PetName', 'Gender', 'Outfit', 'Skin', 'Hair', 'ClaudePath', 'Model', 'Provider', 'GeminiKey', 'GroqKey', 'ClaudeKey', 'FullAccess', 'Chatty', 'Autostart', 'AutoUpdate'];
+  const gemBefore = cfg.GeminiKey;
   for (const k of keys) if (k in c) cfg[k] = c[k];
+  if (cfg.GeminiKey !== gemBefore) cfg.GeminiKind = geminiKinds.get(cfg.GeminiKey) || '';
   saveConfig();
   if (cfg.UserName && cfg.UserName !== profile.name) { profile.name = cfg.UserName; saveAppState(); }
   applyAutostart();
@@ -1536,8 +1565,9 @@ ipcMain.handle('check-key', async (e, d) => {
   } else r = which === 'groq' ? await checkGroqKey(key) : await checkGeminiKey(key);
   r.ms = Date.now() - t0;
   if (r.ok && d.save && cfg) {
-    cfg[KEY_FIELD[which]] = key;
-    saveConfig(); r.saved = true;
+    if (which === 'gemini') setGeminiKey(key);
+    else { cfg[KEY_FIELD[which]] = key; saveConfig(); }
+    r.saved = true;
     if (which === 'claude') { brain.claudeReady = true; brain.claudeBlockedUntil = 0; brain.claude.kill(); setTimeout(prewarmClaude, 800); }
   }
   log(`kalit tekshirildi: ${which} ${r.ok ? 'ishlaydi' : 'ishlamadi'}`);
@@ -1553,45 +1583,93 @@ ipcMain.handle('remove-key', (e, which) => {
 ipcMain.handle('clipboard-text', () => require('electron').clipboard.readText().trim().slice(0, 400));
 
 // kalitni tekshirish: { ok, err } - xato bo'lsa sababini o'zbekcha aytadi
+// bitta yo'lni sinash: { ok, status, msg, reason, warn }
+async function probeGemini(key, kind) {
+  const errOf = async r => {
+    let t = ''; try { t = await r.text(); } catch (e) { }
+    let j = null; try { j = JSON.parse(t); } catch (e) { }
+    const e0 = (Array.isArray(j) ? j[0] : j) || {};
+    const er = e0.error || {};
+    const reason = ((er.details || []).find(d => d && d.reason) || {}).reason || er.status || '';
+    return { ok: false, status: r.status, msg: String(er.message || t).slice(0, 600), reason };
+  };
+  try {
+    if (kind === 'openai') {
+      let last = null;
+      for (const model of FREE.gemini.models) {
+        const r = await fetch(FREE.gemini.url, {
+          method: 'POST', signal: AbortSignal.timeout(25000), headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+          body: JSON.stringify({ model, messages: [{ role: 'user', content: 'Salom' }], max_tokens: 5 }),
+        });
+        if (r.ok) return { ok: true };
+        last = await errOf(r);
+        if (r.status !== 404) break;
+      }
+      return last;
+    }
+    let last = null;
+    for (const model of GOOGLE_MODELS[kind]) {
+      const r = await googleFetch(kind, model, key, { contents: [{ role: 'user', parts: [{ text: 'Salom' }] }], generationConfig: { maxOutputTokens: 5 } }, false, AbortSignal.timeout(25000));
+      if (r.ok) return { ok: true };
+      last = await errOf(r);
+      if (r.status !== 404) break;   // model yo'q bo'lsa - keyingisini sinaymiz; boshqa xato kalitning o'ziga tegishli
+    }
+    return last;
+  } catch (e) { return { ok: false, status: 0, msg: e.message === 'fetch failed' ? "internetga ulanib bo'lmadi" : e.message }; }
+}
+// kalitni tekshirish: { ok, kind, err, url } - qaysi yo'l ishlasa o'shani tanlaydi, bo'lmasa sababini o'zbekcha aytadi
 async function checkGeminiKey(key) {
   key = String(key || '').trim();
   if (!key) return { ok: false, err: 'Kalitni qo\'ying' };
-  if (isVertexKey(key)) {
-    try {
-      let got = '';
-      await streamVertex(key, [{ role: 'user', content: 'Salom' }], t => { got += t; }, null);
-      return { ok: true };
-    } catch (e) {
-      const m = String(e.message || '');
-      // Google xatosida "API'ni yoqish" sahifasining aniq manzili bo'ladi - foydalanuvchiga tugma qilib beramiz
-      const u = m.match(/https:\/\/console\.(?:developers|cloud)\.google\.com\/[^\s"'\\]+/);
-      const enableUrl = u ? u[0] : 'https://console.cloud.google.com/apis/library/aiplatform.googleapis.com';
-      if (/SERVICE_DISABLED|has not been used|is disabled/i.test(m)) return { ok: false, url: enableUrl, err: "Kalit to'g'ri, lekin Google Cloud loyihangizda \"Vertex AI API\" yoqilmagan. \"Yoqish ↗\" ni bosing → ochilgan sahifada \"Enable\" (Yoqish) tugmasini bosing → 1-2 daqiqa kutib, qayta ✅ Tekshirish ni bosing." };
-      if (/403|PERMISSION_DENIED/.test(m)) return { ok: false, url: enableUrl, err: "Kalitga Vertex AI'dan foydalanish ruxsati yo'q. \"Yoqish ↗\" sahifasida Vertex AI API yoqilganini tekshiring, yoki aistudio.google.com/apikey dan \"AIza...\" kalit oling (u ruxsatsiz ishlaydi)." };
-      if (/401|400|API_KEY_INVALID|UNAUTHENTICATED/.test(m)) return { ok: false, err: "Kalit noto'g'ri yoki eskirgan. Uni to'liq nusxalaganingizni tekshiring." };
-      return { ok: false, err: 'Tekshirib bo\'lmadi: ' + m.slice(0, 160) };
+  const kinds = isVertexKey(key) ? ['vertex', 'native'] : ['openai', 'native'];
+  const tries = [];
+  for (const kind of kinds) {
+    const r = await probeGemini(key, kind);
+    if (r.ok || r.status === 429) {
+      geminiKinds.set(key, kind);
+      log('gemini kaliti: ' + kind + ' yo\'li ishlaydi');
+      return { ok: true, kind, warn: r.status === 429 ? "Kalit ishlaydi, lekin hozir limit to'lgan - biroz kutib turing." : undefined };
     }
+    tries.push(Object.assign({ kind }, r));
+    if (r.status === 0) break;   // internet yo'q
   }
-  let last = 0;
-  for (const model of FREE.gemini.models) {
-    try {
-      const r = await fetch(FREE.gemini.url, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-        body: JSON.stringify({ model, messages: [{ role: 'user', content: 'Salom' }], max_tokens: 5 }),
-      });
-      if (r.ok) return { ok: true };
-      last = r.status;
-      if (r.status === 429) return { ok: true, warn: "Kalit ishlaydi, lekin bugungi bepul limit to'lgan - biroz kutib turing." };
-      if (r.status === 400 || r.status === 401) return { ok: false, err: "Kalit noto'g'ri yoki o'chirilgan. aistudio.google.com/apikey dan yangi kalit olib, to'liq nusxalang." };
-      if (r.status === 403) return { ok: false, err: "Kalitga ruxsat yo'q (\"Generative Language API\" yoqilmagan yoki kalit cheklangan). aistudio.google.com/apikey dan yangi kalit yarating." };
-    } catch (e) { return { ok: false, err: "Internetga ulanib bo'lmadi: " + e.message }; }
+  log('gemini kaliti ishlamadi: ' + tries.map(t => `${t.kind} ${t.status} ${t.reason} ${String(t.msg).slice(0, 160)}`).join(' | '));
+  const net = tries.find(t => t.status === 0);
+  if (net) return { ok: false, err: 'Tekshirib bo\'lmadi: ' + net.msg };
+  // xatolardan eng foydalisini tushuntiramiz. "AQ." kalitni Gemini API umuman qabul qilmaydi (ACCESS_TOKEN_TYPE_UNSUPPORTED) -
+  // bunday holda Vertex javobi muhimroq
+  const txt = t => t.reason + ' ' + t.msg;
+  const useful = tries.filter(t => !(t.kind === 'native' && isVertexKey(key) && /ACCESS_TOKEN_TYPE_UNSUPPORTED/.test(txt(t)) && tries.length > 1));
+  const pickT = re => useful.find(t => re.test(txt(t)));
+  const apiName = k => k === 'vertex' ? 'Vertex AI API' : 'Generative Language API';
+  const libUrl = k => k === 'vertex' ? 'https://console.cloud.google.com/apis/library/aiplatform.googleapis.com' : 'https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com';
+  let t;
+  if ((t = pickT(/SERVICE_DISABLED|has not been used|is disabled/i))) {
+    const u = String(t.msg).match(/https:\/\/console\.(?:developers|cloud)\.google\.com\/[^\s"'\\]+/);
+    return { ok: false, url: u ? u[0] : libUrl(t.kind), err: `Kalit to'g'ri, lekin Google Cloud loyihangizda "${apiName(t.kind)}" yoqilmagan. "Yoqish ↗" ni bosing → "Enable" → 2-3 daqiqa kutib, qayta ✅ Tekshirish ni bosing.` };
   }
-  return { ok: false, err: 'Gemini javob bermadi (server kodi ' + last + '). Birozdan keyin qayta tekshiring.' };
+  if ((t = pickT(/API_KEY_SERVICE_BLOCKED|API_KEY_.*BLOCKED|are blocked/i)))
+    return { ok: false, url: 'https://console.cloud.google.com/apis/credentials', err: `Kalit cheklangan: unga "${apiName(t.kind)}" dan foydalanish ruxsat etilmagan. "Yoqish ↗" → kalitingizni bosing → "API restrictions" bo'limida "${apiName(t.kind)}" ni belgilang (yoki "Don't restrict key") → Save.` };
+  if ((t = pickT(/BILLING_DISABLED|billing/i)))
+    return { ok: false, url: 'https://console.cloud.google.com/billing', err: "Google Cloud loyihangizda to'lov (billing) yoqilmagan. Vertex AI uchun billing kerak bo'lishi mumkin. Bepul yo'l: aistudio.google.com/apikey dan \"AIza...\" kalit oling." };
+  if ((t = pickT(/IAM_PERMISSION_DENIED|aiplatform\.endpoints\.predict|Permission .* denied|PERMISSION_DENIED/i)))
+    return { ok: false, url: 'https://console.cloud.google.com/iam-admin/iam', err: `Kalitga ${t.kind === 'vertex' ? 'Vertex AI' : 'Gemini'} modelidan foydalanish huquqi berilmagan. "Yoqish ↗" (IAM) sahifasida kalit bog'langan hisobga (service account) "Vertex AI User" rolini qo'shing. Bepul va oson yo'l: aistudio.google.com/apikey dan "AIza..." kalit oling.` };
+  if (useful.every(t => /API_KEY_INVALID|API key not valid|valid API key|ACCESS_TOKEN_TYPE_UNSUPPORTED|invalid authentication|API_KEY_.*EXPIRED|expired/i.test(txt(t))))
+    return { ok: false, err: "Google bu kalitni yaroqsiz deyapti (noto'g'ri, o'chirilgan yoki muddati o'tgan). Kalitni \"Copy\" tugmasi bilan qaytadan to'liq nusxalang yoki aistudio.google.com/apikey dan yangi kalit yarating." };
+  const g = useful[useful.length - 1] || tries[tries.length - 1];
+  return { ok: false, err: `Google bu kalitni qabul qilmadi (${g.status}${g.reason ? ' ' + g.reason : ''}): "${String(g.msg).slice(0, 220)}". Eng oson yo'l: aistudio.google.com/apikey → "Create API key" → yangi kalitni shu yerga qo'ying.` };
+}
+// kalitni va u ishlaydigan yo'lni birga saqlash
+function setGeminiKey(key) {
+  key = String(key || '').trim();
+  cfg.GeminiKey = key;
+  cfg.GeminiKind = geminiKinds.get(key) || '';
+  saveConfig();
 }
 ipcMain.handle('save-gemini-key', async (e, key) => {
   if (!cfg) return { ok: false, err: 'Avval hisobingizga kiring' };
   const r = await checkGeminiKey(key);
-  if (r.ok) { cfg.GeminiKey = String(key).trim(); saveConfig(); }
+  if (r.ok) setGeminiKey(key);
   return r;
 });
 
@@ -1609,7 +1687,7 @@ ipcMain.handle('connect-gemini', () => new Promise(res => {
     if (m) {
       clearInterval(geminiPoll); geminiPoll = null;
       sendSettings('auth-log', { text: 'Gemini kaliti topildi, tekshiryapman...' });
-      if (await testGemini(m[0])) { cfg.GeminiKey = m[0]; saveConfig(); res({ ok: true, key: m[0] }); }
+      if (await testGemini(m[0])) { setGeminiKey(m[0]); res({ ok: true, key: m[0] }); }
       else res({ ok: false, err: "Topilgan kalit ishlamadi. Yangi kalit yaratib, qaytadan nusxalang." });
     } else if (Date.now() - t0 > 8 * 60000) { clearInterval(geminiPoll); geminiPoll = null; res({ ok: false, err: 'Vaqt tugadi' }); }
   }, 1200);
