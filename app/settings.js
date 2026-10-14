@@ -62,6 +62,19 @@
     refreshGemini();
     return r.ok;
   }
+  // kalitni qo'lda qo'yish: tekshiradi va darhol saqlaydi ("Saqlash" bosish shart emas)
+  async function saveGem() {
+    const k = $('gemQuick').value.trim();
+    if (!k) { authLog('Avval Gemini kalitini maydonga qo\'ying (Ctrl+V)'); return; }
+    $('gemSave').disabled = true; chip('Gemini', false, '⏳ tekshirilmoqda...');
+    const r = await api.saveGeminiKey(k);
+    $('gemSave').disabled = false;
+    if (r.ok) { $('GeminiKey').value = k; c.GeminiKey = k; $('gemQuick').value = ''; authLog('✓ Gemini ulandi va saqlandi!'); }
+    else authLog('Gemini: ' + r.err);
+    refreshGemini();
+  }
+  $('gemSave').addEventListener('click', saveGem);
+  $('gemQuick').addEventListener('keydown', e => { if (e.key === 'Enter') saveGem(); });
   $('connClaude').addEventListener('click', connectClaude);
   $('connGemini').addEventListener('click', connectGemini);
   $('connectAll').addEventListener('click', async () => {

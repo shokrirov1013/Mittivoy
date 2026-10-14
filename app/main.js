@@ -77,7 +77,7 @@ function cleanupOldKichkintoy() {
 }
 
 // ===================================================================== o'zini o'rnatish / o'chirish (tayyor ilova rejimi)
-const VERSION = '2.6.1';
+const VERSION = '2.6.2';
 const INSTALL_DIR = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Mittivoy');
 const PACKAGED = !process.defaultApp;                       // resources\app ichidan ishlayapti
 const EXE_DIR = path.dirname(process.execPath);
@@ -781,7 +781,52 @@ const FREE = {
 };
 const skills = require('./skills');
 
+// Google Vertex AI "Express" kalitlari ("AQ." bilan boshlanadi) - boshqa manzil va so'rov formati
+const VERTEX_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest'];
+function isVertexKey(key) { return /^AQ\./.test(String(key || '').trim()); }
+async function streamVertex(key, messages, onChunk, signal) {
+  const sys = messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n');
+  const contents = messages.filter(m => m.role !== 'system').map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: String(m.content) }] }));
+  let lastErr = '';
+  for (const model of VERTEX_MODELS) {
+    let got = '';
+    try {
+      const res = await fetch(`https://aiplatform.googleapis.com/v1/publishers/google/models/${model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(key.trim())}`, {
+        method: 'POST', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(45000)]) : AbortSignal.timeout(45000),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents, systemInstruction: sys ? { parts: [{ text: sys }] } : undefined, generationConfig: { temperature: 0.8 } }),
+      });
+      if (!res.ok) { lastErr = res.status + ' ' + (await res.text()).slice(0, 200); continue; }
+      const reader = res.body.getReader(), dec = new TextDecoder();
+      let buf = '';
+      for (; ;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let i;
+        while ((i = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+          if (!line.startsWith('data:')) continue;
+          try {
+            const j = JSON.parse(line.slice(5));
+            const parts = j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts || [];
+            for (const p of parts) if (p.text) { got += p.text; onChunk(p.text); }
+          } catch (e) { }
+        }
+      }
+      if (got.trim()) return got;
+      lastErr = "bo'sh javob";
+    } catch (e) {
+      if (signal && signal.aborted) throw e;
+      if (got.trim()) return got;
+      lastErr = e.message;
+    }
+  }
+  throw new Error(lastErr || "javob yo'q");
+}
+
 async function streamChat(name, key, messages, onChunk, signal) {
+  if (name === 'gemini' && isVertexKey(key)) return streamVertex(key, messages, onChunk, signal);
   const P = FREE[name];
   let lastErr = '';
   for (const model of P.models) {
@@ -1120,6 +1165,14 @@ async function ask(id, text) {
   const send = (type, d) => sendPet('ai', Object.assign({ id, type }, type === 'done' && emotion ? { emotion } : {}, d || {}));
   brain.cancelled = false;
   try {
+    // suhbatga Gemini kaliti yozildimi? - tekshirib saqlaymiz; kalit tarixga ham, AI'ga ham yuborilmaydi
+    const km = String(text).match(/AIza[0-9A-Za-z_\-]{30,}|AQ\.[0-9A-Za-z_\-\.]{30,}/);
+    if (km) {
+      send('status', { tool: 'start' });
+      const r = await checkGeminiKey(km[0]);
+      if (r.ok) { cfg.GeminiKey = km[0]; saveConfig(); return send('done', { text: "[kayfiyat:xursand] [harakat:sakra] Gemini ulandi! ✨ Endi suhbatlarga ancha tez javob beraman. (Kalitni xavfsiz saqladim, uni hech kimga ko'rsatmayman.)", source: 'tez' }); }
+      return send('done', { text: '[kayfiyat:hafa] Gemini kalitini ulab bo\'lmadi 😟\n' + r.err, source: 'tez' });
+    }
     const quick = await quickIntent(text);
     if (quick) return send('done', { text: quick, source: 'tez' });
     // tezkor ko'nikmalar: ob-havo, kurs, YouTube, kalkulyator, his-tuyg'ular - serversiz, darhol
@@ -1361,7 +1414,33 @@ ipcMain.handle('connect-claude', (e, email) => new Promise(async res => {
 }));
 ipcMain.on('auth-code', (e, code) => { try { if (authProc) authProc.stdin.write(String(code).trim() + '\n'); } catch (x) { } });
 
+// kalitni tekshirish: { ok, err } - xato bo'lsa sababini o'zbekcha aytadi
+async function checkGeminiKey(key) {
+  key = String(key || '').trim();
+  if (!key) return { ok: false, err: 'Kalitni qo\'ying' };
+  if (isVertexKey(key)) {
+    try {
+      let got = '';
+      await streamVertex(key, [{ role: 'user', content: 'Salom' }], t => { got += t; }, null);
+      return { ok: true };
+    } catch (e) {
+      const m = String(e.message || '');
+      if (/403|PERMISSION_DENIED|SERVICE_DISABLED/.test(m)) return { ok: false, err: "Kalit to'g'ri, lekin Google Cloud loyihangizda \"Vertex AI API\" yoqilmagan (yoki ruxsat yo'q). console.cloud.google.com → Vertex AI → \"Enable\" ni bosing yoki aistudio.google.com/apikey dan \"AIza...\" kalit oling." };
+      if (/401|400|API_KEY_INVALID|UNAUTHENTICATED/.test(m)) return { ok: false, err: "Kalit noto'g'ri yoki eskirgan. Uni to'liq nusxalaganingizni tekshiring." };
+      return { ok: false, err: 'Tekshirib bo\'lmadi: ' + m.slice(0, 160) };
+    }
+  }
+  return (await testGemini(key)) ? { ok: true } : { ok: false, err: "Kalit ishlamadi. aistudio.google.com/apikey dan yangi kalit olib, to'liq nusxalang." };
+}
+ipcMain.handle('save-gemini-key', async (e, key) => {
+  if (!cfg) return { ok: false, err: 'Avval hisobingizga kiring' };
+  const r = await checkGeminiKey(key);
+  if (r.ok) { cfg.GeminiKey = String(key).trim(); saveConfig(); }
+  return r;
+});
+
 async function testGemini(key) {
+  if (isVertexKey(key)) return (await checkGeminiKey(key)).ok;
   try {
     const r = await fetch(FREE.gemini.url, {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
@@ -1384,7 +1463,7 @@ ipcMain.handle('connect-gemini', () => new Promise(res => {
   if (geminiPoll) clearInterval(geminiPoll);
   geminiPoll = setInterval(async () => {
     const txt = clipboard.readText();
-    const m = txt !== before && txt.match(/AIza[0-9A-Za-z_\-]{30,}/);
+    const m = txt !== before && txt.match(/AIza[0-9A-Za-z_\-]{30,}|AQ\.[0-9A-Za-z_\-\.]{30,}/);
     if (m) {
       clearInterval(geminiPoll); geminiPoll = null;
       sendSettings('auth-log', { text: 'Gemini kaliti topildi, tekshiryapman...' });

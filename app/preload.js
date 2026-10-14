@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld('kapi', {
   authCode: c => ipcRenderer.send('auth-code', c),
   connectGemini: () => ipcRenderer.invoke('connect-gemini'),
   testGemini: k => ipcRenderer.invoke('test-gemini', k),
+  saveGeminiKey: k => ipcRenderer.invoke('save-gemini-key', k),
   // sozlamalar oynasi
   settingsGet: () => ipcRenderer.invoke('settings-get'),
   findClaude: () => ipcRenderer.invoke('find-claude'),
