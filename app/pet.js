@@ -129,7 +129,11 @@
   }
 
   // ------------------------------------------------------------------ holat boshqaruvi
-  function setMode(m, dur) { S.mode = m; S.modeT = 0; S.dur = dur == null ? 2 : dur; }
+  function setMode(m, dur) {
+    // yiqilib yotgan / turayotgan paytda boshqa harakat (qo'l silkitish, kulish...) uni "sakratib" yubormasin
+    if ((S.mode === 'fallen' || S.mode === 'getup') && S.modeT < S.dur && !['drag', 'fall', 'thrown', 'jump', 'getup', 'rubhead', 'fallen'].includes(m)) return;
+    S.mode = m; S.modeT = 0; S.dur = dur == null ? 2 : dur;
+  }
   function grounded() { return !S.air && !S.dragging && S.mode !== 'climb'; }
 
   function walkTo(x, run, then) {
@@ -156,9 +160,18 @@
   function hop(vx, vy, spin) { S.vx = vx; S.vy = vy; S.air = true; S.plat = null; S.spin = spin || 0; setMode(spin ? 'cartwheel' : 'jump', 99); }
 
   function land(p) {
-    const v = S.vy;
-    S.y = p.y; S.plat = p; S.air = false; S.vx = 0; S.vy = 0; S.rot = 0; S.spin = 0;
+    const v = S.vy, tumble = S.tumble || 0, controlled = S.controlled;
+    S.y = p.y; S.plat = p; S.air = false; S.vx = 0; S.vy = 0; S.rot = 0; S.spin = 0; S.tumble = 0; S.controlled = false;
     S.x = clamp(S.x, p.x1, p.x2);
+    // baland joydan tushib ketdi (yoki uloqtirildi) - odamdek yiqiladi: yerga urilib yonboshiga yotadi, so'ng asta turadi
+    if (!controlled && (tumble > 55 || (v > 1150 && (S.dropped || S.thrown)))) {
+      S.fallRot = tumble; S.thrown = false; S.dropped = false; S.sitNext = false;
+      setMode('fallen', R(1.8, 2.8));
+      needs.fun = Math.min(100, needs.fun + 2);
+      spawnFx('💫', S.x + S.face * 30, S.y - 40, 2);
+      think(pick(['Voy-voy... 😵', 'Ufff, qattiq yiqildim... 🤕', "Yulduzchalar ko'ryapman ⭐", 'Aaa... boshim... 😵‍💫']), 2.5);
+      return;
+    }
     if (v > 1900) {
       setMode('dizzy', 3); needs.fun += 3;
       spawnFx('💫', S.x, S.y - 150);
@@ -185,6 +198,8 @@
     S.vy += G * dt;
     S.x += S.vx * dt; S.y += S.vy * dt;
     if (S.spin) S.rot += S.spin * 720 * dt;
+    // o'z ixtiyorisiz tushyapti (qo'yib yuborildi, uloqtirildi, oyna yo'qoldi) - tezlik oshgan sari boshi bilan pastga ag'dariladi
+    else if (!S.controlled && (S.mode === 'fall' || S.mode === 'thrown') && S.vy > 450) S.tumble = Math.min(165, (S.tumble || 0) + dt * (140 + S.vy * 0.1));
     if (S.x < HALF - 15) { S.x = HALF - 15; S.vx = Math.abs(S.vx) * 0.6; }
     if (S.x > W - HALF + 15) { S.x = W - HALF + 15; S.vx = -Math.abs(S.vx) * 0.6; }
     if (S.y < FEET + 10 && S.vy < 0) { S.y = FEET + 10; S.vy = Math.abs(S.vy) * 0.3; }
@@ -354,6 +369,8 @@
       case 'thrown': return needs.fun > 40 ? 'kulgi' : 'qorqish';
       case 'think': return 'oylash';
       case 'peek': return 'hayron';
+      case 'fallen': return 'boshaylanish';
+      case 'getup': case 'rubhead': return 'hafa';
       case 'dizzy': return 'boshaylanish';
       case 'laugh': case 'rofl': return 'kulgi';
       case 'sulk': return Math.floor(S.t / 5) % 2 ? 'jahl' : 'hafa';
@@ -388,7 +405,7 @@
       if (r < 0.35) { S.target = clamp(S.x + R(-220, 220), p.x1, p.x2); return setMode('hangmove', 25); }
       if (r < 0.62) return setMode('hang', R(4, 9));
       think(pick(['Sakrayman! 🪂', "Qo'limni qo'yib yubordim! 😆", 'Uuuu! 🎢']), 1.5);
-      S.vx = S.face * R(30, 110); S.vy = 0; S.air = true; S.plat = null;
+      S.vx = S.face * R(30, 110); S.vy = 0; S.air = true; S.plat = null; S.controlled = true;   // o'zi sakradi - oyog'i bilan tushadi
       return setMode('fall', 99);
     }
     if (S.busy) return setMode('think', 9999);
@@ -513,6 +530,16 @@
         case 'crouch':
           if (S.modeT > S.dur) { const f = S.afterCrouch; S.afterCrouch = null; if (f) f(); else setMode('idle', 1); }
           break;
+        // yiqilgandan keyin: yotadi -> asta turadi -> boshini ishqalaydi
+        case 'fallen':
+          if (S.modeT > S.dur) setMode('getup', R(1.7, 2.2));
+          break;
+        case 'getup':
+          if (S.modeT > S.dur) {
+            setMode('rubhead', 1.8);
+            if (rnd() < 0.7) think(pick(['Voy, boshim... 🤕', "Hech narsa bo'lmadi, turdim! 💪", 'Ehtiyot bo\'ling-da! 😤', 'Uff... yana yiqilmay 😅']), 2.5);
+          }
+          break;
         case 'sleep':
           if (needs.energy >= 98 || (idleSec < 5 && needs.energy > 60 && S.modeT > 30)) wake(pick(['Yaxshi uxladim! ☀️', 'Uyg\'ondim! 😊']));
           break;
@@ -525,7 +552,7 @@
         }
       }
       if (S.plat && !S.dragging && (S.x < S.plat.x1 - 22 || S.x > S.plat.x2 + 22)) startFall();
-      if (S.modeT > S.dur && ['idle', 'look', 'peek', 'listen', 'sit', 'dance', 'wave', 'yawn', 'stretch', 'trip', 'land', 'dizzy', 'laugh', 'cry', 'stomp', 'shy', 'sulk', 'rofl', 'hang'].includes(S.mode)) pickNext();
+      if (S.modeT > S.dur && ['idle', 'look', 'peek', 'rubhead', 'listen', 'sit', 'dance', 'wave', 'yawn', 'stretch', 'trip', 'land', 'dizzy', 'laugh', 'cry', 'stomp', 'shy', 'sulk', 'rofl', 'hang'].includes(S.mode)) pickNext();
     }
     ballStep(dt);
     soapStep(dt);
@@ -568,8 +595,29 @@
       case 'trip': rot = S.modeT < 0.35 ? S.modeT / 0.35 * 80 : S.modeT < 1.4 ? 80 : 80 * (1 - (S.modeT - 1.4) / 0.8); rot = Math.max(0, rot); by = rot / 80 * 18; shadow = 0.1; break;
       case 'climb': p = Math.sin(t * 8); armL = 165 + p * 15; armR = -165 + p * 15; legL = p * 25; legR = -p * 25; front = true; shadow = 0; break;
       case 'bubbles': armR = 115; front = true; head = 4; by = -Math.abs(Math.sin(t * 3)) * 2; break;
+      case 'fallen': {
+        // yerga urildi: havodagi burchakdan (boshi pastda) yonboshiga ag'dariladi va yotib qoladi
+        const from = S.fallRot || 0, flop = from > 90 ? 0.2 : 0.35, k = Math.min(1, S.modeT / flop), e = 1 - Math.pow(1 - k, 3);
+        rot = from + (90 - from) * e;
+        by = 30 * e - Math.abs(Math.sin(Math.min(S.modeT, 0.6) * 11)) * 7 * Math.max(0, 1 - S.modeT / 0.6);   // kichik sakrab tushish
+        armL = 105 + Math.sin(t * 1.6) * 5; armR = -70; legL = 8 + Math.sin(t * 1.2) * 3; legR = -6;
+        head = Math.sin(t * 5) * 5; sq = 1; shadow = 0.12;
+        break;
+      }
+      case 'getup': {
+        // qo'llariga tayanib ko'tariladi -> tizzalaydi -> tik turadi
+        const k = Math.min(1, S.modeT / S.dur), e = k * k * (3 - 2 * k);
+        rot = 90 * (1 - e); by = 30 * (1 - e);
+        sit = Math.sin(k * Math.PI) * 0.6;
+        armL = 25 + 70 * (1 - e); armR = -25 - 70 * (1 - e);
+        legL = 38 * Math.sin(k * Math.PI); legR = -14 * Math.sin(k * Math.PI);
+        head = -6 * (1 - e) + Math.sin(t * 4) * 2; shadow = 0.18 * e;
+        break;
+      }
+      case 'rubhead': armR = -165 + Math.sin(t * 12) * 10; armL = 18; head = 7 + Math.sin(t * 12) * 3; bx = Math.sin(t * 3) * 1.5; break;
     }
     if (S.air && S.spin) rot = S.rot;
+    else if (S.air && S.tumble) { rot = S.tumble; armL = 160 + Math.sin(t * 18) * 15; armR = -160 - Math.sin(t * 18) * 15; legL = Math.sin(t * 16) * 22; legR = -legL; }
     // oyna chetiga osilgan: qo'llar tepada (chetni ushlab), oyoqlar osilib tebranadi
     if (S.plat && S.plat.hang && !S.air && !S.dragging) {
       const k = S.moving ? Math.sin(t * 7) : 0;
@@ -600,7 +648,7 @@
     // emotsiya belgisi
     const em = emoteFor();
     if (emoteEl.textContent !== em) emoteEl.textContent = em;
-    if (em) emoteEl.style.transform = `translate(${(S.x + 14).toFixed(1)}px, ${(S.y - FEET - 18 + (m === 'sit' || m === 'sleep' ? 18 : 0) + Math.sin(t * 3) * 3).toFixed(1)}px)`;
+    if (em) emoteEl.style.transform = `translate(${(S.x + 14).toFixed(1)}px, ${(S.y - FEET - 18 + (m === 'sit' || m === 'sleep' ? 18 : m === 'fallen' ? 70 : 0) + Math.sin(t * 3) * 3).toFixed(1)}px)`;
 
     if (ball.on) { ballEl.style.transform = `translate(${(ball.x - 15).toFixed(1)}px, ${(ball.y - 30).toFixed(1)}px) rotate(${ball.rot.toFixed(0)}deg)`; }
     placeBubble();
@@ -881,7 +929,7 @@
     const dx = e.clientX - press.x, dy = e.clientY - press.y;
     if (!press.moved && dx * dx + dy * dy > 49) {
       press.moved = true;
-      S.dragging = true; S.air = false; S.plat = null; S.climb = null; S.spin = 0; S.rot = 0; S.sitNext = false;
+      S.dragging = true; S.air = false; S.plat = null; S.climb = null; S.spin = 0; S.rot = 0; S.sitNext = false; S.tumble = 0; S.controlled = false;
       S.grabDx = S.x - press.x; S.grabDy = S.y - press.y;
       setMode('drag', 9999);
       interact('fun', 2);

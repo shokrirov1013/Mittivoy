@@ -79,7 +79,7 @@ function cleanupOldKichkintoy() {
 }
 
 // ===================================================================== o'zini o'rnatish / o'chirish (tayyor ilova rejimi)
-const VERSION = '2.8.0';
+const VERSION = '2.8.1';
 const INSTALL_DIR = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Mittivoy');
 const PACKAGED = !process.defaultApp;                       // resources\app ichidan ishlayapti
 const EXE_DIR = path.dirname(process.execPath);
@@ -1641,14 +1641,18 @@ ipcMain.handle('install-claude', () => new Promise(res => {
 async function checkGroqKey(key) {
   try {
     const r = await fetch(FREE.groq.url, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+      method: 'POST', signal: AbortSignal.timeout(25000), headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
       body: JSON.stringify({ model: 'llama-3.1-8b-instant', messages: [{ role: 'user', content: 'Salom' }], max_tokens: 5 }),
     });
     if (r.ok) return { ok: true };
-    if (r.status === 401 || r.status === 403) return { ok: false, err: "Kalit noto'g'ri yoki o'chirilgan. console.groq.com/keys dan yangisini oling." };
+    let msg = '', code = '';
+    try { const j = JSON.parse(await r.text()); msg = (j.error && j.error.message) || ''; code = (j.error && j.error.code) || ''; } catch (x) { }
+    log(`groq kaliti ishlamadi: ${r.status} ${code} ${String(msg).slice(0, 200)}`);
     if (r.status === 429) return { ok: true, warn: 'Kalit ishlaydi, lekin hozir limit to\'lgan - birozdan keyin javob beradi.' };
-    return { ok: false, err: 'Server javobi: ' + r.status };
-  } catch (e) { return { ok: false, err: "Internetga ulanib bo'lmadi: " + e.message }; }
+    if (r.status === 401 || /invalid_api_key/i.test(code)) return { ok: false, url: 'https://console.groq.com/keys', urlText: 'Yangi kalit olish ↗', err: "Groq bu kalitni yaroqsiz deyapti (noto'g'ri nusxalangan yoki o'chirilgan). \"Yangi kalit olish ↗\" → \"Create API Key\" → kalitni \"Copy\" tugmasi bilan to'liq nusxalab qo'ying (u faqat bir marta ko'rsatiladi)." };
+    if (r.status === 403) return { ok: false, url: 'https://console.groq.com/keys', urlText: 'Groq hisobini ochish ↗', err: `Groq ruxsat bermadi (403)${msg ? ': "' + msg.slice(0, 160) + '"' : ''}. Hisobingiz yoki hududingiz cheklangan bo'lishi mumkin - Groq ixtiyoriy, Mittivoy usiz ham ishlaydi.` };
+    return { ok: false, err: `Groq javobi: ${r.status}${msg ? ' - "' + msg.slice(0, 160) + '"' : ''}` };
+  } catch (e) { return { ok: false, err: "Groq'ga ulanib bo'lmadi: " + e.message }; }
 }
 const KEY_FIELD = { gemini: 'GeminiKey', groq: 'GroqKey', claude: 'ClaudeKey' };
 ipcMain.handle('check-key', async (e, d) => {
@@ -1736,8 +1740,12 @@ async function checkGeminiKey(key) {
     if (r.status === 0) break;   // internet yo'q
   }
   log('gemini kaliti ishlamadi: ' + tries.map(t => `${t.kind} ${t.status} ${t.reason} ${String(t.msg).slice(0, 160)}`).join(' | '));
-  const net = tries.find(t => t.status === 0);
-  if (net) return { ok: false, err: 'Tekshirib bo\'lmadi: ' + net.msg };
+  // internet xatosi faqat HAMMA urinish shu sabab bilan tugagan bo'lsa ko'rsatiladi (aks holda Google'ning aniq javobi muhimroq)
+  if (tries.every(t => t.status === 0)) return { ok: false, err: "Google'ga ulanib bo'lmadi (" + tries[0].msg + "). Internetni tekshirib, qayta ✅ Tekshirish ni bosing." };
+  // "AQ." - Google Cloud (Vertex AI) kaliti: to'lov (billing) yoqilmagan loyihada ishlamaydi - bepul yo'lni ko'rsatamiz
+  const bill = tries.find(t => /BILLING_DISABLED|requires billing/i.test(t.reason + ' ' + t.msg));
+  if (bill && isVertexKey(key))
+    return { ok: false, url: 'https://aistudio.google.com/apikey', urlText: 'Bepul kalit olish ↗', err: "Bu kalit Google Cloud (Vertex AI) kaliti - u faqat to'lov (billing) yoqilgan loyihada ishlaydi. Bepul yo'l: \"Bepul kalit olish ↗\" → \"Create API key\" → \"AIza...\" bilan boshlanadigan kalitni nusxalab, shu yerga qo'ying." };
   // xatolardan eng foydalisini tushuntiramiz. "AQ." kalitni Gemini API umuman qabul qilmaydi (ACCESS_TOKEN_TYPE_UNSUPPORTED) -
   // bunday holda Vertex javobi muhimroq
   const txt = t => t.reason + ' ' + t.msg;
@@ -1753,7 +1761,7 @@ async function checkGeminiKey(key) {
   if ((t = pickT(/API_KEY_SERVICE_BLOCKED|API_KEY_.*BLOCKED|are blocked/i)))
     return { ok: false, url: 'https://console.cloud.google.com/apis/credentials', err: `Kalit cheklangan: unga "${apiName(t.kind)}" dan foydalanish ruxsat etilmagan. "Yoqish ↗" → kalitingizni bosing → "API restrictions" bo'limida "${apiName(t.kind)}" ni belgilang (yoki "Don't restrict key") → Save.` };
   if ((t = pickT(/BILLING_DISABLED|billing/i)))
-    return { ok: false, url: 'https://console.cloud.google.com/billing', err: "Google Cloud loyihangizda to'lov (billing) yoqilmagan. Vertex AI uchun billing kerak bo'lishi mumkin. Bepul yo'l: aistudio.google.com/apikey dan \"AIza...\" kalit oling." };
+    return { ok: false, url: 'https://aistudio.google.com/apikey', urlText: 'Bepul kalit olish ↗', err: "Google Cloud loyihangizda to'lov (billing) yoqilmagan, bu kalit shuning uchun ishlamaydi. Bepul yo'l: \"Bepul kalit olish ↗\" → \"Create API key\" → \"AIza...\" kalitni shu yerga qo'ying." };
   if ((t = pickT(/IAM_PERMISSION_DENIED|aiplatform\.endpoints\.predict|Permission .* denied|PERMISSION_DENIED/i)))
     return { ok: false, url: 'https://console.cloud.google.com/iam-admin/iam', err: `Kalitga ${t.kind === 'vertex' ? 'Vertex AI' : 'Gemini'} modelidan foydalanish huquqi berilmagan. "Yoqish ↗" (IAM) sahifasida kalit bog'langan hisobga (service account) "Vertex AI User" rolini qo'shing. Bepul va oson yo'l: aistudio.google.com/apikey dan "AIza..." kalit oling.` };
   if (useful.every(t => /API_KEY_INVALID|API key not valid|valid API key|ACCESS_TOKEN_TYPE_UNSUPPORTED|invalid authentication|API_KEY_.*EXPIRED|expired/i.test(txt(t))))

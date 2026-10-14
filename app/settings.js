@@ -114,7 +114,7 @@
       badge(name, 'off', '✗ Ishlamayapti');
       result(name, 'off', '✗ ' + r.err + ' ');
       if (r.url) {   // masalan: Vertex AI API yoqilmagan - Google'ning aniq "yoqish" sahifasi
-        const a = document.createElement('a'); a.textContent = 'Yoqish ↗';
+        const a = document.createElement('a'); a.textContent = r.urlText || 'Yoqish ↗';
         a.addEventListener('click', () => api.openExternal(r.url));
         $('r' + name).appendChild(a);
       }
