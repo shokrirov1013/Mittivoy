@@ -24,7 +24,7 @@ $bad = Get-ChildItem $stage -Recurse -File | Where-Object { $_.Name -in @('confi
 if ($bad) { throw "Shaxsiy fayl topildi: $($bad.FullName)" }
 
 $desk = [Environment]::GetFolderPath('Desktop')
-$zip = Join-Path $desk 'Mittivoy-2.5-Windows.zip'
+$zip = Join-Path $desk 'Mittivoy-2.5.1-Windows.zip'
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal
 "ZIP: {0:N1} MB" -f ((Get-Item $zip).Length / 1MB)

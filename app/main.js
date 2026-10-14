@@ -9,6 +9,49 @@ app.setName('Mittivoy');
 app.setPath('userData', path.join(app.getPath('appData'), 'Mittivoy'));
 app.setAppUserModelId('uz.mittivoy.yordamchi');
 
+// ===================================================================== Store (MSIX) ilovasi ichidan ishga tushirilganda
+// Windows AppData va registrni o'sha ilovaning shaxsiy "virtual" nusxasiga yo'naltiradi: hisoblar u yerda qolib ketadi,
+// avtomatik ishga tushish esa Windows'ga ko'rinmaydi. Mittivoy buni aniqlaydi va haqiqiy muhitda qayta ochiladi.
+const USER_DATA = app.getPath('userData');
+function findVirtualCopies() {
+  const out = [];
+  try {
+    const pk = path.join(process.env.LOCALAPPDATA || '', 'Packages');
+    for (const d of fs.readdirSync(pk)) {
+      const p = path.join(pk, d, 'LocalCache', 'Roaming', 'Mittivoy');
+      if (fs.existsSync(p)) out.push(p);
+    }
+  } catch (e) { }
+  return out;
+}
+let VIRTUALIZED = false;
+(function detectVirtualization() {
+  try {
+    const token = require('crypto').randomBytes(8).toString('hex');
+    fs.mkdirSync(USER_DATA, { recursive: true });
+    fs.writeFileSync(path.join(USER_DATA, '.joy'), token);
+    VIRTUALIZED = findVirtualCopies().some(p => { try { return fs.readFileSync(path.join(p, '.joy'), 'utf8') === token; } catch (e) { return false; } });
+  } catch (e) { }
+})();
+// haqiqiy muhitda hisob yo'q, virtual nusxada bor bo'lsa - ko'chirib olamiz
+(function rescueVirtualizedData() {
+  if (VIRTUALIZED) return;
+  try {
+    const own = path.join(USER_DATA, 'app.json');
+    let st = null; try { st = JSON.parse(fs.readFileSync(own, 'utf8')); } catch (e) { }
+    if (st && Array.isArray(st.profiles) && st.profiles.length) return;
+    for (const p of findVirtualCopies()) {
+      let v = null; try { v = JSON.parse(fs.readFileSync(path.join(p, 'app.json'), 'utf8')); } catch (e) { }
+      if (v && Array.isArray(v.profiles) && v.profiles.length) {
+        fs.copyFileSync(path.join(p, 'app.json'), own);
+        if (fs.existsSync(path.join(p, 'profiles'))) fs.cpSync(path.join(p, 'profiles'), path.join(USER_DATA, 'profiles'), { recursive: true, force: true });
+        fs.appendFileSync(path.join(USER_DATA, 'log.txt'), new Date().toISOString() + '  virtual nusxadan hisoblar tiklandi: ' + p + '\n');
+        break;
+      }
+    }
+  } catch (e) { }
+})();
+
 // ===================================================================== eski "Kichkintoy" versiyasi qoldiqlari
 // Mittivoy noldan boshlanadi: eski profillar ko'chirilmaydi, eski dastur va uning ma'lumotlari tozalanadi.
 const OLD_DATA = path.join(app.getPath('appData'), 'Kichkintoy');
@@ -34,7 +77,7 @@ function cleanupOldKichkintoy() {
 }
 
 // ===================================================================== o'zini o'rnatish / o'chirish (tayyor ilova rejimi)
-const VERSION = '2.5';
+const VERSION = '2.5.1';
 const INSTALL_DIR = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Mittivoy');
 const PACKAGED = !process.defaultApp;                       // resources\app ichidan ishlayapti
 const EXE_DIR = path.dirname(process.execPath);
@@ -44,23 +87,52 @@ const UNINSTALL_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Unins
 function regAdd(name, type, value) {
   try { require('child_process').execFileSync('reg.exe', ['add', UNINSTALL_KEY, '/v', name, '/t', type, '/d', String(value), '/f'], { windowsHide: true }); } catch (e) { }
 }
+const psq = s => "'" + String(s).replace(/'/g, "''") + "'";
+function writeLink(lnk, dir, args) {
+  const exe = path.join(dir, 'Mittivoy.exe'), icon = path.join(dir, 'resources', 'app', 'assets', 'icon.ico');
+  let ok = false;
+  try { fs.mkdirSync(path.dirname(lnk), { recursive: true }); } catch (e) { }
+  try { ok = shell.writeShortcutLink(lnk, fs.existsSync(lnk) ? 'replace' : 'create', { target: exe, cwd: dir, icon, iconIndex: 0, args, description: "Mittivoy - o'zbekcha AI yordamchi" }); } catch (e) { }
+  if (!ok || !fs.existsSync(lnk)) {
+    // zaxira usul: Windows'ning o'z WScript.Shell vositasi
+    try {
+      require('child_process').execFileSync('powershell.exe', ['-NoProfile', '-Command',
+        `$s=(New-Object -ComObject WScript.Shell).CreateShortcut(${psq(lnk)}); $s.TargetPath=${psq(exe)}; $s.Arguments=${psq(args)}; $s.WorkingDirectory=${psq(dir)}; $s.IconLocation=${psq(icon + ',0')}; $s.Description='Mittivoy'; $s.Save()`],
+        { windowsHide: true, timeout: 20000 });
+    } catch (e) { }
+  }
+}
+
+// Avtomatik ishga tushish: 1) Windows Rejalashtiruvchisi (tizimga kirishda, eng ishonchli), 2) Startup papkasidagi yorliq.
+// Eski "Run" yozuvi olib tashlanadi - ba'zi kompyuterlarda Windows uni jimgina o'tkazib yuboradi.
+const STARTUP_LNK = path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', 'Mittivoy.lnk');
+function setAutostart(dir, on, sync) {
+  const cp = require('child_process');
+  try { cp.execFileSync('reg.exe', ['delete', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', '/v', 'Mittivoy', '/f'], { windowsHide: true, stdio: 'ignore' }); } catch (e) { }
+  let ps;
+  if (on) {
+    writeLink(STARTUP_LNK, dir, '--autostart');
+    const exe = path.join(dir, 'Mittivoy.exe');
+    ps = `$u = "$env:USERDOMAIN\\$env:USERNAME"; $t = New-ScheduledTaskTrigger -AtLogOn -User $u; $t.Delay = 'PT8S';` +
+      ` $a = New-ScheduledTaskAction -Execute ${psq(exe)} -Argument '--autostart' -WorkingDirectory ${psq(dir)};` +
+      ` $p = New-ScheduledTaskPrincipal -UserId $u -LogonType Interactive -RunLevel Limited;` +
+      ` $s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -StartWhenAvailable;` +
+      ` Register-ScheduledTask -TaskName 'Mittivoy' -Description 'Mittivoy - kompyuter yoqilganda ishga tushadi' -Trigger $t -Action $a -Principal $p -Settings $s -Force | Out-Null`;
+  } else {
+    try { fs.rmSync(STARTUP_LNK, { force: true }); } catch (e) { }
+    ps = "Unregister-ScheduledTask -TaskName 'Mittivoy' -Confirm:$false -ErrorAction SilentlyContinue";
+  }
+  const args = ['-NoProfile', '-NonInteractive', '-Command', ps];
+  if (sync) { try { cp.execFileSync('powershell.exe', args, { windowsHide: true, timeout: 40000 }); } catch (e) { log('autostart: ' + e.message); } }
+  else cp.execFile('powershell.exe', args, { windowsHide: true, timeout: 40000 }, e => { if (e) log('autostart: ' + e.message); });
+}
+
 function makeShortcuts(dir) {
   const exe = path.join(dir, 'Mittivoy.exe'), icon = path.join(dir, 'resources', 'app', 'assets', 'icon.ico');
   const startMenu = path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs');
-  const links = [[path.join(app.getPath('desktop'), 'Mittivoy.lnk'), ''], [path.join(startMenu, 'Mittivoy.lnk'), ''], [path.join(startMenu, 'Mittivoy sozlamalari.lnk'), '--sozlamalar']];
-  for (const [lnk, args] of links) {
-    let ok = false;
-    try { ok = shell.writeShortcutLink(lnk, fs.existsSync(lnk) ? 'replace' : 'create', { target: exe, cwd: dir, icon, iconIndex: 0, args, description: "Mittivoy - o'zbekcha AI yordamchi" }); } catch (e) { }
-    if (!ok || !fs.existsSync(lnk)) {
-      // zaxira usul: Windows'ning o'z WScript.Shell vositasi
-      const q = s => "'" + String(s).replace(/'/g, "''") + "'";
-      try {
-        require('child_process').execFileSync('powershell.exe', ['-NoProfile', '-Command',
-          `$s=(New-Object -ComObject WScript.Shell).CreateShortcut(${q(lnk)}); $s.TargetPath=${q(exe)}; $s.Arguments=${q(args)}; $s.WorkingDirectory=${q(dir)}; $s.IconLocation=${q(icon + ',0')}; $s.Description='Mittivoy'; $s.Save()`],
-          { windowsHide: true, timeout: 20000 });
-      } catch (e) { }
-    }
-  }
+  writeLink(path.join(app.getPath('desktop'), 'Mittivoy.lnk'), dir, '');
+  writeLink(path.join(startMenu, 'Mittivoy.lnk'), dir, '');
+  writeLink(path.join(startMenu, 'Mittivoy sozlamalari.lnk'), dir, '--sozlamalar');
   regAdd('DisplayName', 'REG_SZ', 'Mittivoy');
   regAdd('DisplayVersion', 'REG_SZ', VERSION);
   regAdd('Publisher', 'REG_SZ', 'Mittivoy');
@@ -86,8 +158,9 @@ function selfInstall() {
   fs.mkdirSync(INSTALL_DIR, { recursive: true });
   fs.cpSync(EXE_DIR, INSTALL_DIR, { recursive: true, force: true });
   makeShortcuts(INSTALL_DIR);
-  try { require('child_process').execFileSync('reg.exe', ['add', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', '/v', 'Mittivoy', '/t', 'REG_SZ', '/d', `"${path.join(INSTALL_DIR, 'Mittivoy.exe')}"`, '/f'], { windowsHide: true }); } catch (e) { }
-  spawn(path.join(INSTALL_DIR, 'Mittivoy.exe'), [], { detached: true, stdio: 'ignore', cwd: INSTALL_DIR }).unref();
+  setAutostart(INSTALL_DIR, true, true);
+  // Explorer orqali ochamiz - shunda o'rnatuvchi qayerdan ishga tushirilgan bo'lmasin, Mittivoy haqiqiy muhitda ishlaydi
+  spawn('explorer.exe', [path.join(INSTALL_DIR, 'Mittivoy.exe')], { detached: true, stdio: 'ignore' }).unref();
 }
 function selfUninstall() {
   const { dialog } = require('electron');
@@ -100,7 +173,7 @@ function selfUninstall() {
   const startMenu = path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs');
   for (const f of [path.join(app.getPath('desktop'), 'Mittivoy.lnk'), path.join(startMenu, 'Mittivoy.lnk'), path.join(startMenu, 'Mittivoy sozlamalari.lnk')]) { try { fs.rmSync(f, { force: true }); } catch (e) { } }
   const cp = require('child_process');
-  try { cp.execFileSync('reg.exe', ['delete', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', '/v', 'Mittivoy', '/f'], { windowsHide: true }); } catch (e) { }
+  setAutostart(INSTALL_DIR, false, true);
   try { cp.execFileSync('reg.exe', ['delete', UNINSTALL_KEY, '/f'], { windowsHide: true }); } catch (e) { }
   // qayta o'rnatilganda hisob qayta so'ralsin
   try { const aj = path.join(app.getPath('userData'), 'app.json'); const s = JSON.parse(fs.readFileSync(aj, 'utf8')); s.lastProfile = null; fs.writeFileSync(aj, JSON.stringify(s, null, 2)); } catch (e) { }
@@ -109,6 +182,11 @@ function selfUninstall() {
 }
 
 let skipRest = false;
+if (PACKAGED && INSTALLED && VIRTUALIZED && !process.argv.includes('--uninstall')) {
+  // virtual muhitda ochildi - Explorer orqali haqiqiy muhitda qayta ochamiz
+  try { spawn('explorer.exe', [process.execPath], { detached: true, stdio: 'ignore' }).unref(); } catch (e) { }
+  process.exit(0);
+}
 if (PACKAGED && process.argv.includes('--uninstall')) {
   skipRest = true;
   app.whenReady().then(() => { selfUninstall(); app.exit(0); });
@@ -208,10 +286,14 @@ function extractFacts(text) {
 let pet = null, settingsWin = null, signinWin = null, tray = null, tracker = null, quitting = false, hiddenByUser = false, fullscreenHidden = false;
 
 // ===================================================================== avtomatik ishga tushish
+let autostartApplied = null;
 function applyAutostart() {
   try {
-    if (PACKAGED && !INSTALLED) return;   // o'rnatilmagan (portativ) nusxa avtomatik ishga tushirilmaydi
-    app.setLoginItemSettings({ openAtLogin: cfg ? !!cfg.Autostart : true, path: process.execPath, args: PACKAGED ? [] : [app.getAppPath()], name: 'Mittivoy' });
+    if (!PACKAGED || !INSTALLED) return;   // faqat o'rnatilgan nusxa avtomatik ishga tushiriladi
+    const on = cfg ? !!cfg.Autostart : true;
+    if (autostartApplied === on) return;
+    autostartApplied = on;
+    setAutostart(INSTALL_DIR, on, false);
   } catch (e) { log('autostart: ' + e); }
 }
 
@@ -1232,6 +1314,7 @@ function start() {
 setInterval(() => { try { if (pet) sendPet('idle', powerMonitor.getSystemIdleTime()); } catch (e) { } }, 3000);
 
 app.on('second-instance', (e, argv) => {
+  if (argv.includes('--autostart')) return;   // bir nechta avtomatik ishga tushirish usuli bir vaqtda ishlasa - jim
   if (!cfg) return openSignin();
   if (argv.includes('--sozlamalar')) return openSettings(false);
   showPet(); sendPet('cmd', { name: 'chat' });

@@ -1,4 +1,4 @@
-# Mittivoy 2.5 🇺🇿
+# Mittivoy 2.5.1 🇺🇿
 
 **O'zbekcha AI yordamchi — ekraningizda yashaydigan kichkina do'st (Windows uchun)**
 
@@ -9,7 +9,7 @@ o'ynaydi, his-tuyg'ulari va fe'li bor, siz bilan **o'zbek tilida** gaplashadi va
 
 ## ⬇️ Yuklab olish
 
-**[Mittivoy-2.5-Windows.zip ni yuklab olish](https://github.com/shokrirov1013/Mittivoy/releases/latest)**
+**[Mittivoy-2.5.1-Windows.zip ni yuklab olish](https://github.com/shokrirov1013/Mittivoy/releases/latest)**
 
 1. ZIP'ni o'ng tugma bilan bosing → **Extract All** (Hammasini chiqarish).
 2. `Mittivoy` papkasidagi **Mittivoy.exe** ni ikki marta bosing → **O'rnatish**.
