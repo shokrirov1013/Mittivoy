@@ -77,7 +77,7 @@ function cleanupOldKichkintoy() {
 }
 
 // ===================================================================== o'zini o'rnatish / o'chirish (tayyor ilova rejimi)
-const VERSION = '2.7.1';
+const VERSION = '2.7.2';
 const INSTALL_DIR = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Mittivoy');
 const PACKAGED = !process.defaultApp;                       // resources\app ichidan ishlayapti
 const EXE_DIR = path.dirname(process.execPath);
@@ -193,8 +193,12 @@ function selfUninstall() {
   // qayta o'rnatilganda hisob qayta so'ralsin
   try { const aj = path.join(app.getPath('userData'), 'app.json'); const s = JSON.parse(fs.readFileSync(aj, 'utf8')); s.lastProfile = null; fs.writeFileSync(aj, JSON.stringify(s, null, 2)); } catch (e) { }
   try { fs.rmSync(path.join(app.getPath('userData'), 'session.bin'), { force: true }); } catch (e) { }
-  const extra = r === 1 ? ` & rmdir /s /q "${path.join(app.getPath('appData'), 'Mittivoy')}"` : '';
-  spawn('cmd.exe', ['/c', `ping 127.0.0.1 -n 3 > nul & rmdir /s /q "${INSTALL_DIR}"${extra}`], { detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true }).unref();
+  const extra = r === 1 ? `\r\nrmdir /s /q "${path.join(app.getPath('appData'), 'Mittivoy')}"` : '';
+  // Mittivoy yopilgandan keyin papkani o'chiradigan skript. Oddiy spawn Mittivoy bilan birga to'xtab qolishi mumkin,
+  // shuning uchun Electron'ning app.relaunch() usuli bilan - u Mittivoy to'liq yopilgach skriptni ishga tushiradi
+  const bat = path.join(os.tmpdir(), 'mittivoy-ochirish.cmd');
+  fs.writeFileSync(bat, `@echo off\r\nchcp 65001 > nul\r\ntitle Mittivoy o'chirilmoqda\r\necho Mittivoy o'chirilmoqda...\r\nping 127.0.0.1 -n 4 > nul\r\nrmdir /s /q "${INSTALL_DIR}"${extra}\r\ndel "%~f0"\r\n`);
+  app.relaunch({ execPath: process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe', args: ['/c', bat] });
 }
 
 let skipRest = false;
@@ -403,7 +407,8 @@ function openSettings(first) {
   settingsWin.on('closed', () => {
     settingsWin = null;
     stopConnect();
-    if (!pet && profile) { if (cfg.UserName && cfg.PetName) start(); else logout(); }
+    // dastur yopilayotgan bo'lsa (masalan, yangilanish) - qahramonni qayta yaratmaymiz, aks holda yopilish bekor bo'ladi
+    if (!pet && profile && !quitting) { if (cfg.UserName && cfg.PetName) start(); else logout(); }
   });
 }
 
@@ -1709,8 +1714,13 @@ function initUpdater() {
         try { tray.displayBalloon({ iconType: 'info', title: 'Mittivoy ' + s.latest + ' chiqdi! ✨', content: "Yangilash uchun shu yerni bosing (yoki tray menyusida \"Yangilash\")." }); } catch (e) { }
       }
     },
-    beforeQuit: () => { quitting = true; },
-    quit: () => app.quit(),
+    // Electron'ning rasmiy qayta ishga tushirish usuli: Mittivoy to'liq yopilgach, yangi nusxani (yoki o'rnatuvchini) o'zi ochadi
+    relaunch: (execPath, args) => {
+      quitting = true;
+      app.relaunch(execPath ? { execPath, args: args || [] } : { args: [] });
+      app.quit();
+      setTimeout(() => app.exit(0), 8000);   // biror oyna yopilishni to'xtatib qolsa ham - baribir chiqamiz
+    },
   });
   if (PACKAGED) setTimeout(() => updater.cleanup(), 60000);
   const autostarted = process.argv.includes('--autostart');

@@ -1,7 +1,8 @@
 // Mittivoy yangilanishlari: GitHub'dagi eng so'nggi relizni tekshiradi, yuklab oladi va o'rnatadi.
 // Ikki xil yangilanish:
-//  - yengil: faqat ilova kodi (resources\app, ~1 MB) - Electron versiyasi o'zgarmagan bo'lsa; 1-2 soniyada
+//  - yengil: faqat ilova kodi (resources\app, ~1 MB) - Electron versiyasi o'zgarmagan bo'lsa; papka almashtiriladi
 //  - to'liq: butun ZIP (~100 MB) - yangi Mittivoy.exe "--ornat" bilan o'zini ustidan o'rnatadi
+// Ikkala holatda ham qayta ishga tushirish Electron'ning app.relaunch() orqali (main.js dagi relaunch).
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -10,6 +11,7 @@ const { spawn, execFile } = require('child_process');
 
 const REPO = 'shokrirov1013/Mittivoy';
 const psq = s => "'" + String(s).replace(/'/g, "''") + "'";
+
 
 function cmpVer(a, b) {
   const pa = String(a).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
@@ -20,7 +22,7 @@ function cmpVer(a, b) {
 
 class Updater {
   constructor(o) {
-    this.o = o;   // { version, exeDir, packaged, log, onState, beforeQuit, quit }
+    this.o = o;   // { version, exeDir, packaged, log, onState, relaunch(execPath?, args?) }
     this.state = { current: o.version, latest: null, available: false, busy: false, error: null };
     this.rel = null;
   }
@@ -93,20 +95,20 @@ class Updater {
         fs.rmSync(zip, { force: true });
         const pj = JSON.parse(fs.readFileSync(path.join(next, 'package.json'), 'utf8'));
         if (!fs.existsSync(path.join(next, 'main.js')) || cmpVer(pj.version, latest) !== 0) throw new Error("Yangilanish fayllari to'liq emas");
-        const exe = path.join(this.o.exeDir, 'Mittivoy.exe');
-        const ps = [
-          `$ErrorActionPreference = 'SilentlyContinue'`,
-          `Wait-Process -Id ${process.pid} -Timeout 30; Start-Sleep -Milliseconds 700`,
-          `$r = ${psq(res)}`,
-          `Remove-Item (Join-Path $r 'app.old') -Recurse -Force`,
-          `$ok = $false; for ($i = 0; $i -lt 30 -and -not $ok; $i++) { try { Rename-Item (Join-Path $r 'app') 'app.old' -ErrorAction Stop; $ok = $true } catch { Start-Sleep -Milliseconds 500 } }`,
-          `if ($ok) { Rename-Item (Join-Path $r 'app.new') 'app'; if (-not (Test-Path (Join-Path $r 'app\\main.js'))) { Remove-Item (Join-Path $r 'app') -Recurse -Force; Rename-Item (Join-Path $r 'app.old') 'app' } }`,
-          `Start-Process explorer.exe -ArgumentList ('"' + ${psq(exe)} + '"')`,
-        ].join('\r\n');
-        const script = path.join(os.tmpdir(), 'mittivoy-yangilash.ps1');
-        fs.writeFileSync(script, '﻿' + ps, 'utf8');
+        // papkalarni shu yerning o'zida almashtiramiz: ilova kodi (JS/HTML) xotirada, fayllar band emas.
+        // Tashqi yordamchi jarayonga tayanmaymiz - Windows uni Mittivoy bilan birga to'xtatib qo'yishi mumkin (sinovda shunday bo'ldi).
+        const cur = path.join(res, 'app'), old = path.join(res, 'app.old');
+        fs.rmSync(old, { recursive: true, force: true });
+        let moved = false;
+        for (let i = 0; i < 20 && !moved; i++) {
+          try { fs.renameSync(cur, old); moved = true; } catch (e) { await new Promise(r => setTimeout(r, 300)); }
+        }
+        if (!moved) throw new Error("Ilova fayllari hozir band - birozdan keyin qayta urinib ko'ring");
+        try { fs.renameSync(next, cur); }
+        catch (e) { try { fs.renameSync(old, cur); } catch (x) { } throw new Error("Fayllarni almashtirib bo'lmadi: " + e.message); }
         this.set({ progress: 1, stage: '🔄 Qayta ishga tushirilmoqda...' });
-        spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', script], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+        this.o.log('yangilanish o\'rnatildi: ' + latest + ' (yengil) - qayta ishga tushirilmoqda');
+        setTimeout(() => this.o.relaunch(), 300);
       } else {
         // to'liq yangilanish: yangi Mittivoy.exe o'zini o'rnatadi (eskisini to'xtatib, ustidan yozadi, so'ng ishga tushadi)
         const dir = path.join(os.tmpdir(), 'Mittivoy-yangilanish');
@@ -121,10 +123,10 @@ class Updater {
         if (!fs.existsSync(exe)) exe = path.join(dir, 'x', 'Mittivoy.exe');
         if (!fs.existsSync(exe)) throw new Error("Arxivda Mittivoy.exe topilmadi");
         this.set({ progress: 1, stage: "🔄 O'rnatilmoqda..." });
-        spawn(exe, ['--ornat'], { detached: true, stdio: 'ignore', cwd: path.dirname(exe) }).unref();
+        this.o.log('yangilanish o\'rnatilmoqda: ' + latest + ' (to\'liq)');
+        // Mittivoy yopilgach yangi Mittivoy.exe "--ornat" bilan ochiladi: o'zini ustidan o'rnatadi va ishga tushadi
+        setTimeout(() => this.o.relaunch(exe, ['--ornat']), 300);
       }
-      this.o.log('yangilanish o\'rnatilmoqda: ' + latest + (lite ? ' (yengil)' : ' (to\'liq)'));
-      setTimeout(() => { try { this.o.beforeQuit(); } catch (e) { } this.o.quit(); }, 400);
       return { ok: true };
     } catch (e) {
       this.o.log('yangilanish xatosi: ' + e.message);
