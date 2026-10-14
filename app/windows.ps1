@@ -4,11 +4,16 @@
 # Ota jarayon yopilsa (stdin yopiladi) - o'zi ham to'xtaydi.
 param([int]$OwnPid = 0)
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+# boshqa virtual ish stolidagi yoki "yashirilgan" (cloaked) oynalar ko'rinmaydi - ularga chiqib bo'lmaydi
+try { Add-Type -Namespace MV -Name Dwm -MemberDefinition '[DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int a, out int v, int s);' } catch {}
+function Cloaked([int64]$h) { try { $v = 0; [void][MV.Dwm]::DwmGetWindowAttribute([IntPtr]$h, 14, [ref]$v, 4); return $v -ne 0 } catch { return $false } }
 $A = [System.Windows.Automation.AutomationElement]
 $cond = New-Object System.Windows.Automation.PropertyCondition ($A::ControlTypeProperty), ([System.Windows.Automation.ControlType]::Window)
 $skip = @('Shell_TrayWnd', 'Shell_SecondaryTrayWnd', 'Progman', 'WorkerW', 'Windows.UI.Core.CoreWindow', 'XamlExplorerHostIslandWindow', 'TopLevelWindowForOverflowXamlIsland', 'NotifyIconOverflowWindow')
 $out = [Console]::Out
-$inp = [Console]::In
+# DIQQAT: [Console]::In.ReadLineAsync() .NET Framework'da aslida sinxron - qator kelguncha butun siklni to'xtatib qo'yadi
+# (shuning uchun oynalar ro'yxati umuman yuborilmay qolardi). StreamReader esa o'qishni fon oqimida bajaradi.
+$inp = New-Object System.IO.StreamReader ([Console]::OpenStandardInput())
 $task = $inp.ReadLineAsync()
 $focus = $null; $focusId = 0; $lastF = ''
 $last = ''; $n = 0
@@ -47,6 +52,7 @@ while ($true) {
                     if ($skip -contains $c.ClassName) { continue }
                     $r = $c.BoundingRectangle
                     if ($r.IsEmpty -or $r.Width -lt 200 -or $r.Height -lt 100) { continue }
+                    if (Cloaked $c.NativeWindowHandle) { continue }
                     [void]$list.Add([ordered]@{ id = [int64]$c.NativeWindowHandle; x = [int]$r.X; y = [int]$r.Y; w = [int]$r.Width; h = [int]$r.Height })
                 } catch {}
             }

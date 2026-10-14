@@ -77,7 +77,7 @@ function cleanupOldKichkintoy() {
 }
 
 // ===================================================================== o'zini o'rnatish / o'chirish (tayyor ilova rejimi)
-const VERSION = '2.6.2';
+const VERSION = '2.7.0';
 const INSTALL_DIR = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Mittivoy');
 const PACKAGED = !process.defaultApp;                       // resources\app ichidan ishlayapti
 const EXE_DIR = path.dirname(process.execPath);
@@ -237,7 +237,7 @@ const DATA = app.getPath('userData');
 const ICON = path.join(__dirname, 'assets', 'icon.ico');
 const DEFAULTS = {
   UserName: '', PetName: '', Gender: 'girl', Outfit: 'zamonaviy', Skin: 'orta', Hair: 'qora',
-  ClaudePath: '', SessionId: '', Model: '', Provider: 'auto', GeminiKey: '', GroqKey: '',
+  ClaudePath: '', SessionId: '', Model: '', Provider: 'auto', GeminiKey: '', GroqKey: '', ClaudeKey: '', AutoUpdate: true,
   FullAccess: true, Chatty: true, Autostart: true, Needs: { energy: 80, fun: 70, love: 70 }, AppVersion: 2, Reminders: [],
 };
 
@@ -274,16 +274,18 @@ function saveMemory() { if (PDIR) { writeJson(path.join(PDIR, 'memory.json'), me
 // ===================================================================== bulutli hisob (Supabase)
 const { Cloud } = require('./cloud');
 let cloud = null;   // app tayyor bo'lganda yaratiladi (safeStorage kerak)
-const SYNC_KEYS = ['UserName', 'PetName', 'Gender', 'Outfit', 'Skin', 'Hair', 'Provider', 'Model', 'FullAccess', 'Chatty', 'Autostart', 'Needs', 'Reminders'];
+const SYNC_KEYS = ['UserName', 'PetName', 'Gender', 'Outfit', 'Skin', 'Hair', 'Provider', 'Model', 'FullAccess', 'Chatty', 'Autostart', 'AutoUpdate', 'Needs', 'Reminders'];
+const SECRET_KEYS = ['GeminiKey', 'GroqKey', 'ClaudeKey'];   // bulutda parolingiz bilan shifrlangan holda saqlanadi
 function collectData() {
   const c = {}; for (const k of SYNC_KEYS) if (cfg && k in cfg) c[k] = cfg[k];
-  return { config: c, memory: { facts: memory.facts || [] }, secret: { GeminiKey: cfg ? cfg.GeminiKey || '' : '', GroqKey: cfg ? cfg.GroqKey || '' : '' } };
+  const secret = {}; for (const k of SECRET_KEYS) secret[k] = cfg ? cfg[k] || '' : '';
+  return { config: c, memory: { facts: memory.facts || [] }, secret };
 }
 function applyData(d) {
   if (!d || !cfg) return;
   if (d.config) for (const k of SYNC_KEYS) if (k in d.config) cfg[k] = d.config[k];
   if (d.memory && Array.isArray(d.memory.facts)) memory.facts = d.memory.facts;
-  if (d.secret) { if (d.secret.GeminiKey) cfg.GeminiKey = d.secret.GeminiKey; if (d.secret.GroqKey) cfg.GroqKey = d.secret.GroqKey; }
+  if (d.secret) for (const k of SECRET_KEYS) if (d.secret[k]) cfg[k] = d.secret[k];
   if (d.updated) cfg.SyncedAt = d.updated;
   writeJson(path.join(PDIR, 'config.json'), cfg);
   writeJson(path.join(PDIR, 'memory.json'), memory);
@@ -311,7 +313,7 @@ async function syncOnLogin() {
   }
 }
 function saveHistory() { if (PDIR) writeJson(path.join(PDIR, 'history.json'), { history: brain.history, unseen: brain.claudeUnseen }); }
-function publicConfig() { const c = Object.assign({}, cfg); delete c.GeminiKey; delete c.GroqKey; return c; }
+function publicConfig() { const c = Object.assign({}, cfg); for (const k of SECRET_KEYS) delete c[k]; return c; }
 
 function hashPin(pin, salt) { return crypto.scryptSync(String(pin), salt, 32).toString('hex'); }
 // Kirish oynasida faqat shu kompyuterda oxirgi marta kirgan hisob ko'rsatiladi (boshqa profillar ro'yxati ko'rinmaydi)
@@ -391,7 +393,7 @@ function hidePet() { hiddenByUser = true; if (pet) pet.hide(); }
 function openSettings(first) {
   if (settingsWin) { settingsWin.show(); settingsWin.focus(); return; }
   settingsWin = new BrowserWindow({
-    width: 900, height: 740, resizable: false, title: first ? 'Mittivoy - Xush kelibsiz!' : 'Mittivoy - Sozlamalar',
+    width: 980, height: 780, resizable: false, title: first ? 'Mittivoy - Xush kelibsiz!' : 'Mittivoy - Sozlamalar',
     icon: ICON, autoHideMenuBar: true, show: false, backgroundColor: '#FFF6E8',
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
@@ -526,11 +528,14 @@ function googleSignIn() {
 function updateTray() {
   if (!tray) return;
   tray.setToolTip(cfg ? (cfg.PetName || 'Mittivoy') + ' - AI yordamchi' : 'Mittivoy');
+  const u = updater && updater.state;
   const items = cfg ? [
+    ...(u && u.available ? [{ label: u.busy ? '⏳ Yangilanmoqda...' : `⬇ Yangilash: ${u.latest} (yangi versiya)`, enabled: !u.busy, click: () => updater.install() }, { type: 'separator' }] : []),
     { label: 'Gaplashish', click: () => { showPet(); sendPet('cmd', { name: 'chat' }); } },
     { label: "Ko'rsatish / Yashirish", click: () => { if (pet && pet.isVisible()) hidePet(); else showPet(); } },
     { label: 'Sozlamalar', click: () => openSettings(false) },
     { label: 'Claude hisobiga kirish', click: claudeLogin },
+    { label: '🔍 Yangilanishni tekshirish', click: async () => { if (!updater) return; const s = await updater.check(); if (!s.available) try { tray.displayBalloon({ iconType: 'info', title: 'Mittivoy', content: s.error ? s.error : `Sizda eng so'nggi versiya (${VERSION}) ✓` }); } catch (e) { } } },
     { type: 'separator' },
     { label: `👤 ${profile.name}${profile.email ? ' (' + profile.email + ')' : ''} - profildan chiqish`, click: logout },
   ] : [{ label: 'Kirish', click: openSignin }];
@@ -540,6 +545,7 @@ function updateTray() {
 function buildTray() {
   tray = new Tray(ICON);
   updateTray();
+  tray.on('balloon-click', () => { if (updater && updater.state.available && !updater.state.busy) updater.install(); });
   tray.on('click', () => { if (!cfg) return openSignin(); showPet(); sendPet('cmd', { name: 'chat' }); });
 }
 
@@ -606,36 +612,63 @@ function handleWindows(line) {
 }
 
 // ===================================================================== Claude Code
+let claudeFound = { t: 0, f: null };
 function findClaude(pref) {
   try {
     if (pref && fs.existsSync(pref)) return pref;
-    const c = [path.join(os.homedir(), '.local', 'bin', 'claude.exe')];
+    if (Date.now() - claudeFound.t < 30000 && claudeFound.f && fs.existsSync(claudeFound.f)) return claudeFound.f;
+    const c = [path.join(os.homedir(), '.local', 'bin', 'claude.exe'), path.join(os.homedir(), '.claude', 'local', 'claude.exe')];
     for (const d of (process.env.PATH || '').split(';')) if (d.trim()) { c.push(path.join(d.trim(), 'claude.exe')); c.push(path.join(d.trim(), 'claude.cmd')); }
     c.push(path.join(process.env.APPDATA || '', 'npm', 'claude.cmd'));
-    for (const f of c) { try { if (fs.existsSync(f)) return f; } catch (e) { } }
-    const root = path.join(process.env.APPDATA || '', 'Claude', 'claude-code');
-    if (fs.existsSync(root)) {
-      let best = null, bestT = 0;
-      for (const v of fs.readdirSync(root)) {
-        const vd = path.join(root, v);
+    let best = null;
+    for (const f of c) { try { if (fs.existsSync(f)) { best = f; break; } } catch (e) { } }
+    if (!best) {
+      // Claude ilovasi ichidagi Claude Code: oddiy AppData'da yoki Microsoft Store (MSIX) ilovasining yashirin papkasida
+      // (Store versiyasida fayllar faqat ...\Packages\Claude_*\LocalCache ichida - tashqaridan %APPDATA%\Claude ko'rinmaydi)
+      const roots = [path.join(process.env.APPDATA || '', 'Claude', 'claude-code')];
+      const pk = path.join(process.env.LOCALAPPDATA || '', 'Packages');
+      try { for (const d of fs.readdirSync(pk)) if (/^Claude_/i.test(d)) roots.push(path.join(pk, d, 'LocalCache', 'Roaming', 'Claude', 'claude-code')); } catch (e) { }
+      let bestT = 0;
+      for (const root of roots) {
         try {
-          for (const h of fs.readdirSync(vd)) {
-            const f = path.join(vd, h, 'claude.exe');
-            if (fs.existsSync(f)) { const t = fs.statSync(f).mtimeMs; if (t > bestT) { bestT = t; best = f; } }
+          for (const v of fs.readdirSync(root)) {
+            const vd = path.join(root, v);
+            try {
+              for (const h of fs.readdirSync(vd)) {
+                const f = path.join(vd, h, 'claude.exe');
+                if (fs.existsSync(f)) { const t = fs.statSync(f).mtimeMs; if (t > bestT) { bestT = t; best = f; } }
+              }
+            } catch (e) { }
           }
         } catch (e) { }
       }
-      if (best) return best;
     }
+    claudeFound = { t: Date.now(), f: best };
+    return best;
   } catch (e) { log('find: ' + e); }
   return null;
 }
+// Claude Code'ni toza muhitda ishga tushirish: boshqa Claude ilovasidan meros qolgan CLAUDE_*/ANTHROPIC_* o'zgaruvchilar
+// uni chalg'itmasin - foydalanuvchining o'z hisobi (~/.claude) ishlatiladi
+// Foydalanuvchi sozlamalarda Claude kaliti qo'ygan bo'lsa: sk-ant-oat... (obuna tokeni, "claude setup-token") yoki
+// sk-ant-api... (Anthropic API kaliti) - Claude Code shu bilan ishlaydi
+function claudeEnv(keyOverride) {
+  const env = Object.assign({}, process.env);
+  if (env.CLAUDECODE || env.CLAUDE_CODE_ENTRYPOINT) {
+    for (const k of Object.keys(env)) if (/^(CLAUDECODE|CLAUDE_CODE_|CLAUDE_AGENT_|CLAUDE_PID|ANTHROPIC_BASE_URL)/i.test(k)) delete env[k];
+  }
+  const key = keyOverride !== undefined ? keyOverride : (cfg && cfg.ClaudeKey) || '';
+  if (/^sk-ant-oat/i.test(key)) { env.CLAUDE_CODE_OAUTH_TOKEN = key; delete env.ANTHROPIC_API_KEY; }
+  else if (/^sk-ant-/i.test(key)) env.ANTHROPIC_API_KEY = key;
+  return env;
+}
+function exeArg(exe) { return /\.cmd$/i.test(exe) ? `"${exe}"` : exe; }   // .cmd faqat shell orqali ishlaydi
 
 function claudeLogin() {
   const exe = findClaude(cfg.ClaudePath);
   if (!exe) { shell.openExternal('https://claude.com/claude-code'); return; }
   const cmd = `title Claude hisobiga kirish & echo. & echo   Claude ochiladi. Kirish so'ralsa ko'rsatmalarga amal qiling (yoki /login deb yozing). & echo   Kirib bo'lgach bu oynani yopishingiz mumkin. & echo. & "${exe}"`;
-  spawn('cmd.exe', ['/k', cmd], { detached: true, cwd: os.homedir(), stdio: 'ignore', windowsVerbatimArguments: true }).unref();
+  spawn('cmd.exe', ['/k', cmd], { detached: true, cwd: os.homedir(), stdio: 'ignore', windowsVerbatimArguments: true, env: claudeEnv() }).unref();
   brain.claudeBlockedUntil = 0;
   brain.claude.kill();   // kirgandan keyin yangi jarayon yangi hisob bilan ishga tushadi
 }
@@ -711,7 +744,7 @@ function killTree(pid) { try { execFile('taskkill', ['/T', '/F', '/PID', String(
 class ClaudeSession {
   constructor() { this.proc = null; this.buf = ''; this.pending = null; this.key = ''; this.stderr = ''; this.hadText = false; }
   ensure(exe) {
-    const key = [exe, profile && profile.id, cfg.SessionId ? 's' : '', cfg.FullAccess, cfg.Model, cfg.PetName, cfg.UserName, cfg.Gender, cfg.Outfit, memory.facts.length].join('|');
+    const key = [exe, profile && profile.id, cfg.SessionId ? 's' : '', (cfg.ClaudeKey || '').slice(-8), cfg.FullAccess, cfg.Model, cfg.PetName, cfg.UserName, cfg.Gender, cfg.Outfit, memory.facts.length].join('|');
     if (this.proc && this.key === key) return;
     this.kill();
     this.key = key;
@@ -723,7 +756,7 @@ class ClaudeSession {
     if (cfg.FullAccess) args.push('--dangerously-skip-permissions'); else args.push('--permission-mode', 'acceptEdits');
     args.push('--model', cfg.Model || 'sonnet');   // tezroq javob uchun standart - Sonnet
     const isCmd = /\.cmd$/i.test(exe);
-    const proc = spawn(isCmd ? `"${exe}"` : exe, args, { cwd: os.homedir(), windowsHide: true, shell: isCmd });
+    const proc = spawn(isCmd ? `"${exe}"` : exe, args, { cwd: os.homedir(), windowsHide: true, shell: isCmd, env: claudeEnv() });
     this.proc = proc; this.buf = ''; this.stderr = '';
     proc.stdout.on('data', d => this.onData(d));
     proc.stderr.on('data', d => { this.stderr = (this.stderr + d.toString()).slice(-3000); });
@@ -796,7 +829,11 @@ async function streamVertex(key, messages, onChunk, signal) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents, systemInstruction: sys ? { parts: [{ text: sys }] } : undefined, generationConfig: { temperature: 0.8 } }),
       });
-      if (!res.ok) { lastErr = res.status + ' ' + (await res.text()).slice(0, 200); continue; }
+      if (!res.ok) {
+        lastErr = res.status + ' ' + (await res.text()).slice(0, 1500);
+        if (res.status === 401 || res.status === 403) break;   // kalit/loyiha darajasidagi xato - boshqa model ham baribir ishlamaydi
+        continue;
+      }
       const reader = res.body.getReader(), dec = new TextDecoder();
       let buf = '';
       for (; ;) {
@@ -1345,7 +1382,7 @@ ipcMain.handle('settings-get', () => ({ cfg, found: findClaude(cfg.ClaudePath), 
 ipcMain.handle('find-claude', () => findClaude(''));
 ipcMain.on('settings-save', (e, c) => {
   if (!cfg) return;
-  const keys = ['UserName', 'PetName', 'Gender', 'Outfit', 'Skin', 'Hair', 'ClaudePath', 'Model', 'Provider', 'GeminiKey', 'GroqKey', 'FullAccess', 'Chatty', 'Autostart'];
+  const keys = ['UserName', 'PetName', 'Gender', 'Outfit', 'Skin', 'Hair', 'ClaudePath', 'Model', 'Provider', 'GeminiKey', 'GroqKey', 'ClaudeKey', 'FullAccess', 'Chatty', 'Autostart', 'AutoUpdate'];
   for (const k of keys) if (k in c) cfg[k] = c[k];
   saveConfig();
   if (cfg.UserName && cfg.UserName !== profile.name) { profile.name = cfg.UserName; saveAppState(); }
@@ -1364,11 +1401,12 @@ ipcMain.on('settings-cancel', () => { if (settingsWin) settingsWin.close(); });
 function claudeStatus(exe) {
   return new Promise(res => {
     if (!exe) return res({ loggedIn: false, missing: true });
-    execFile(exe, ['auth', 'status', '--json'], { windowsHide: true, timeout: 20000 }, (e, out) => {
+    const viaKey = !!(cfg && cfg.ClaudeKey);
+    execFile(exeArg(exe), ['auth', 'status', '--json'], { windowsHide: true, timeout: 20000, env: claudeEnv(''), shell: /\.cmd$/i.test(exe) }, (e, out) => {
       try {
         const j = JSON.parse(String(out || '').trim());
-        res({ loggedIn: !!j.loggedIn, email: j.email || (j.account && j.account.email) || '' });
-      } catch (x) { res({ loggedIn: false }); }
+        res({ loggedIn: !!j.loggedIn || viaKey, viaKey, account: !!j.loggedIn, email: j.email || (j.account && j.account.email) || '' });
+      } catch (x) { res({ loggedIn: viaKey, viaKey, account: false }); }
     });
   });
 }
@@ -1385,11 +1423,11 @@ ipcMain.handle('connect-claude', (e, email) => new Promise(async res => {
   const exe = findClaude(cfg.ClaudePath);
   if (!exe) return res({ ok: false, missing: true, err: 'Claude Code topilmadi' });
   const st0 = await claudeStatus(exe);
-  if (st0.loggedIn) return res({ ok: true, email: st0.email });
+  if (st0.account) return res({ ok: true, email: st0.email });
   if (authProc) { try { killTree(authProc.pid); } catch (x) { } }
   const args = ['auth', 'login', '--claudeai'];
   if (email && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) args.push('--email', email);
-  authProc = spawn(exe, args, { windowsHide: true, cwd: os.homedir() });
+  authProc = spawn(exeArg(exe), args, { windowsHide: true, cwd: os.homedir(), env: claudeEnv(''), shell: /\.cmd$/i.test(exe) });
   const onOut = d => {
     const s = d.toString();
     log('auth: ' + s.slice(0, 400));
@@ -1401,7 +1439,7 @@ ipcMain.handle('connect-claude', (e, email) => new Promise(async res => {
   if (authPoll) clearInterval(authPoll);
   authPoll = setInterval(async () => {
     const st = await claudeStatus(exe);
-    if (st.loggedIn) {
+    if (st.account) {
       clearInterval(authPoll); authPoll = null;
       if (authProc) { try { killTree(authProc.pid); } catch (x) { } authProc = null; }
       brain.claudeBlockedUntil = 0; brain.claude.kill();
@@ -1414,6 +1452,106 @@ ipcMain.handle('connect-claude', (e, email) => new Promise(async res => {
 }));
 ipcMain.on('auth-code', (e, code) => { try { if (authProc) authProc.stdin.write(String(code).trim() + '\n'); } catch (x) { } });
 
+// "Tekshirish": Claude Code topiladimi, hisobga kirilganmi va rostdan javob beradimi - bosqichma-bosqich
+ipcMain.handle('check-claude', async () => {
+  claudeFound.t = 0;
+  const exe = findClaude(cfg ? cfg.ClaudePath : '');
+  if (!exe) return { ok: false, step: 'missing', err: "Claude Code bu kompyuterda topilmadi. \"O'rnatish\" tugmasini bosing." };
+  const st = await claudeStatus(exe);
+  if (!st.loggedIn) return { ok: false, step: 'login', path: exe, err: 'Claude Code bor, lekin hisobga kirilmagan. "Kirish (Sign in)" tugmasini bosing yoki pastga Claude kalitini qo\'ying.' };
+  const r = await pingClaude(exe, claudeEnv());
+  if (r.ok) { brain.claudeReady = true; brain.claudeBlockedUntil = 0; setTimeout(prewarmClaude, 500); }
+  return Object.assign({ step: r.ok ? 'ok' : 'answer', path: exe, email: st.email, viaKey: st.viaKey }, r);
+});
+// Claude'ga haqiqiy kichik so'rov yuborib ko'radi: { ok, err, ms }
+function pingClaude(exe, env) {
+  const t0 = Date.now();
+  return new Promise(res => {
+    execFile(exeArg(exe), ['-p', 'Salom', '--model', 'haiku', '--output-format', 'json'],
+      { windowsHide: true, timeout: 90000, cwd: os.homedir(), env, shell: /\.cmd$/i.test(exe), maxBuffer: 4 << 20 }, (e, out, err) => {
+        let j = null; try { j = JSON.parse(String(out || '').trim()); } catch (x) { }
+        if (j && !j.is_error) return res({ ok: true, ms: Date.now() - t0 });
+        const m = String((j && j.result) || err || (e && e.message) || '').trim();
+        log('claude sinov: ' + m.slice(0, 300));
+        res({
+          ok: false, ms: Date.now() - t0,
+          err: /credit balance|billing/i.test(m) ? "Anthropic hisobingizda mablag' yo'q (API kaliti pullik). console.anthropic.com → Billing, yoki obuna tokenidan foydalaning."
+            : looksLogin(m) || /invalid.*(key|token)|401/i.test(m) ? "Kalit/kirish yaroqsiz yoki muddati tugagan. Qayta kiring yoki yangi kalit qo'ying."
+              : /limit|usage|429/i.test(m) ? "Claude limiti tugagan - birozdan keyin qayta urinib ko'ring."
+                : e && e.killed ? 'Claude 90 soniyada javob bermadi - internetni tekshirib, qayta urinib ko\'ring.'
+                  : 'Javob bermadi: ' + m.slice(0, 160),
+        });
+      });
+  });
+}
+// obuna (Pro/Max) uchun uzoq muddatli token: terminalda "claude setup-token" - chiqqan sk-ant-oat... ni foydalanuvchi o'zi nusxalaydi
+ipcMain.handle('claude-setup-token', () => {
+  const exe = findClaude(cfg ? cfg.ClaudePath : '');
+  if (!exe) return { ok: false, err: "Avval Claude Code'ni o'rnating" };
+  const cmd = `title Claude tokenini olish & echo. & echo   Brauzerda Claude hisobingizga kiring. Oxirida chiqqan sk-ant-oat... tokenni nusxalab, & echo   Mittivoy sozlamalaridagi Claude kaliti maydoniga qo'ying. & echo. & "${exe}" setup-token`;
+  spawn('cmd.exe', ['/k', cmd], { detached: true, cwd: os.homedir(), stdio: 'ignore', windowsVerbatimArguments: true, env: claudeEnv('') }).unref();
+  return { ok: true };
+});
+// Claude Code yo'q bo'lsa - rasmiy o'rnatuvchini ko'rinadigan oynada ishga tushiradi va o'rnatilishini kutadi
+ipcMain.handle('install-claude', () => new Promise(res => {
+  const ps = "Write-Host '  Claude Code o''rnatilmoqda (rasmiy o''rnatuvchi: claude.ai)...' -ForegroundColor Cyan; irm https://claude.ai/install.ps1 | iex; Write-Host ''; Write-Host '  Tayyor! Bu oynani yopib, Mittivoy sozlamalarida Kirish tugmasini bosing.' -ForegroundColor Green";
+  try { spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-Command', ps], { detached: true, stdio: 'ignore', cwd: os.homedir(), env: claudeEnv('') }).unref(); }
+  catch (e) { shell.openExternal('https://claude.com/claude-code'); return res({ ok: false, err: e.message }); }
+  const t0 = Date.now();
+  const iv = setInterval(() => {
+    claudeFound.t = 0;
+    const f = findClaude('');
+    if (f) { clearInterval(iv); res({ ok: true, path: f }); }
+    else if (Date.now() - t0 > 10 * 60000) { clearInterval(iv); res({ ok: false, err: "O'rnatish tugamadi. Oynadagi xabarni o'qing yoki qayta urinib ko'ring." }); }
+  }, 3000);
+}));
+
+// API kalitlarni tekshirish (Gemini / Groq): { ok, err, ms }; save=true va ishlasa - darhol saqlanadi
+async function checkGroqKey(key) {
+  try {
+    const r = await fetch(FREE.groq.url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+      body: JSON.stringify({ model: 'llama-3.1-8b-instant', messages: [{ role: 'user', content: 'Salom' }], max_tokens: 5 }),
+    });
+    if (r.ok) return { ok: true };
+    if (r.status === 401 || r.status === 403) return { ok: false, err: "Kalit noto'g'ri yoki o'chirilgan. console.groq.com/keys dan yangisini oling." };
+    if (r.status === 429) return { ok: true, warn: 'Kalit ishlaydi, lekin hozir limit to\'lgan - birozdan keyin javob beradi.' };
+    return { ok: false, err: 'Server javobi: ' + r.status };
+  } catch (e) { return { ok: false, err: "Internetga ulanib bo'lmadi: " + e.message }; }
+}
+const KEY_FIELD = { gemini: 'GeminiKey', groq: 'GroqKey', claude: 'ClaudeKey' };
+ipcMain.handle('check-key', async (e, d) => {
+  const which = KEY_FIELD[d && d.which] ? d.which : 'gemini';
+  const key = String((d && d.key) || '').replace(/\s+/g, '');
+  if (!key) return { ok: false, err: "Avval kalitni maydonga qo'ying (Ctrl+V yoki \"Qo'yish\" tugmasi)." };
+  if (which === 'gemini' && !/^(AIza|AQ\.)/.test(key)) return { ok: false, err: 'Bu Gemini kalitiga o\'xshamaydi: Gemini kaliti "AIza..." yoki "AQ." bilan boshlanadi.' };
+  if (which === 'groq' && !/^gsk_/.test(key)) return { ok: false, err: 'Bu Groq kalitiga o\'xshamaydi: Groq kaliti "gsk_" bilan boshlanadi.' };
+  if (which === 'claude' && !/^sk-ant-/.test(key)) return { ok: false, err: 'Bu Claude kalitiga o\'xshamaydi: u "sk-ant-" bilan boshlanadi (API kaliti: sk-ant-api..., obuna tokeni: sk-ant-oat...).' };
+  let r;
+  const t0 = Date.now();
+  if (which === 'claude') {
+    const exe = findClaude(cfg ? cfg.ClaudePath : '');
+    if (!exe) return { ok: false, err: "Claude Code bu kompyuterda topilmadi - yuqoridagi \"O'rnatish\" tugmasini bosing." };
+    r = await pingClaude(exe, claudeEnv(key));
+  } else r = which === 'groq' ? await checkGroqKey(key) : await checkGeminiKey(key);
+  r.ms = Date.now() - t0;
+  if (r.ok && d.save && cfg) {
+    cfg[KEY_FIELD[which]] = key;
+    saveConfig(); r.saved = true;
+    if (which === 'claude') { brain.claudeReady = true; brain.claudeBlockedUntil = 0; brain.claude.kill(); setTimeout(prewarmClaude, 800); }
+  }
+  log(`kalit tekshirildi: ${which} ${r.ok ? 'ishlaydi' : 'ishlamadi'}`);
+  return r;
+});
+ipcMain.handle('remove-key', (e, which) => {
+  if (!cfg || !KEY_FIELD[which]) return false;
+  cfg[KEY_FIELD[which]] = '';
+  saveConfig();
+  if (which === 'claude') { brain.claude.kill(); checkClaudeReady(); }
+  return true;
+});
+ipcMain.handle('clipboard-text', () => require('electron').clipboard.readText().trim().slice(0, 400));
+
 // kalitni tekshirish: { ok, err } - xato bo'lsa sababini o'zbekcha aytadi
 async function checkGeminiKey(key) {
   key = String(key || '').trim();
@@ -1425,12 +1563,30 @@ async function checkGeminiKey(key) {
       return { ok: true };
     } catch (e) {
       const m = String(e.message || '');
-      if (/403|PERMISSION_DENIED|SERVICE_DISABLED/.test(m)) return { ok: false, err: "Kalit to'g'ri, lekin Google Cloud loyihangizda \"Vertex AI API\" yoqilmagan (yoki ruxsat yo'q). console.cloud.google.com → Vertex AI → \"Enable\" ni bosing yoki aistudio.google.com/apikey dan \"AIza...\" kalit oling." };
+      // Google xatosida "API'ni yoqish" sahifasining aniq manzili bo'ladi - foydalanuvchiga tugma qilib beramiz
+      const u = m.match(/https:\/\/console\.(?:developers|cloud)\.google\.com\/[^\s"'\\]+/);
+      const enableUrl = u ? u[0] : 'https://console.cloud.google.com/apis/library/aiplatform.googleapis.com';
+      if (/SERVICE_DISABLED|has not been used|is disabled/i.test(m)) return { ok: false, url: enableUrl, err: "Kalit to'g'ri, lekin Google Cloud loyihangizda \"Vertex AI API\" yoqilmagan. \"Yoqish ↗\" ni bosing → ochilgan sahifada \"Enable\" (Yoqish) tugmasini bosing → 1-2 daqiqa kutib, qayta ✅ Tekshirish ni bosing." };
+      if (/403|PERMISSION_DENIED/.test(m)) return { ok: false, url: enableUrl, err: "Kalitga Vertex AI'dan foydalanish ruxsati yo'q. \"Yoqish ↗\" sahifasida Vertex AI API yoqilganini tekshiring, yoki aistudio.google.com/apikey dan \"AIza...\" kalit oling (u ruxsatsiz ishlaydi)." };
       if (/401|400|API_KEY_INVALID|UNAUTHENTICATED/.test(m)) return { ok: false, err: "Kalit noto'g'ri yoki eskirgan. Uni to'liq nusxalaganingizni tekshiring." };
       return { ok: false, err: 'Tekshirib bo\'lmadi: ' + m.slice(0, 160) };
     }
   }
-  return (await testGemini(key)) ? { ok: true } : { ok: false, err: "Kalit ishlamadi. aistudio.google.com/apikey dan yangi kalit olib, to'liq nusxalang." };
+  let last = 0;
+  for (const model of FREE.gemini.models) {
+    try {
+      const r = await fetch(FREE.gemini.url, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+        body: JSON.stringify({ model, messages: [{ role: 'user', content: 'Salom' }], max_tokens: 5 }),
+      });
+      if (r.ok) return { ok: true };
+      last = r.status;
+      if (r.status === 429) return { ok: true, warn: "Kalit ishlaydi, lekin bugungi bepul limit to'lgan - biroz kutib turing." };
+      if (r.status === 400 || r.status === 401) return { ok: false, err: "Kalit noto'g'ri yoki o'chirilgan. aistudio.google.com/apikey dan yangi kalit olib, to'liq nusxalang." };
+      if (r.status === 403) return { ok: false, err: "Kalitga ruxsat yo'q (\"Generative Language API\" yoqilmagan yoki kalit cheklangan). aistudio.google.com/apikey dan yangi kalit yarating." };
+    } catch (e) { return { ok: false, err: "Internetga ulanib bo'lmadi: " + e.message }; }
+  }
+  return { ok: false, err: 'Gemini javob bermadi (server kodi ' + last + '). Birozdan keyin qayta tekshiring.' };
 }
 ipcMain.handle('save-gemini-key', async (e, key) => {
   if (!cfg) return { ok: false, err: 'Avval hisobingizga kiring' };
@@ -1439,21 +1595,7 @@ ipcMain.handle('save-gemini-key', async (e, key) => {
   return r;
 });
 
-async function testGemini(key) {
-  if (isVertexKey(key)) return (await checkGeminiKey(key)).ok;
-  try {
-    const r = await fetch(FREE.gemini.url, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-      body: JSON.stringify({ model: 'gemini-flash-latest', messages: [{ role: 'user', content: 'Salom' }], max_tokens: 5 }),
-    });
-    if (r.ok) return true;
-    const r2 = await fetch(FREE.gemini.url, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-      body: JSON.stringify({ model: 'gemini-2.5-flash', messages: [{ role: 'user', content: 'Salom' }], max_tokens: 5 }),
-    });
-    return r2.ok;
-  } catch (e) { return false; }
-}
+async function testGemini(key) { return (await checkGeminiKey(key)).ok; }
 ipcMain.handle('test-gemini', (e, key) => testGemini(String(key || '').trim()));
 ipcMain.handle('connect-gemini', () => new Promise(res => {
   const { clipboard } = require('electron');
@@ -1474,6 +1616,45 @@ ipcMain.handle('connect-gemini', () => new Promise(res => {
 }));
 ipcMain.on('open-external', (e, u) => { if (/^https?:\/\//i.test(u)) shell.openExternal(u); });
 
+// ===================================================================== yangilanishlar (GitHub relizlari)
+const { Updater } = require('./updater');
+let updater = null, updateNotified = '';
+function initUpdater() {
+  updater = new Updater({
+    version: VERSION, exeDir: EXE_DIR, packaged: PACKAGED, log,
+    onState: s => {
+      sendSettings('update-state', s);
+      updateTray();
+      if (s.available && !s.busy && updateNotified !== s.latest) {
+        updateNotified = s.latest;
+        sendPet('cmd', { name: 'update', version: s.latest });
+        try { tray.displayBalloon({ iconType: 'info', title: 'Mittivoy ' + s.latest + ' chiqdi! ✨', content: "Yangilash uchun shu yerni bosing (yoki tray menyusida \"Yangilash\")." }); } catch (e) { }
+      }
+    },
+    beforeQuit: () => { quitting = true; },
+    quit: () => app.quit(),
+  });
+  if (PACKAGED) setTimeout(() => updater.cleanup(), 60000);
+  const autostarted = process.argv.includes('--autostart');
+  const check = () => { if (PACKAGED && !updater.state.busy) updater.check(); };
+  setTimeout(check, autostarted ? 45000 : 20000);
+  setInterval(check, 6 * 3600 * 1000);
+  // avtomatik o'rnatish: kompyuterdan 2 daqiqa foydalanilmasa (yoki Windows endigina yoqilgan bo'lsa)
+  setInterval(() => {
+    const s = updater.state;
+    if (!s.available || s.busy || s.error || !cfg || cfg.AutoUpdate === false) return;
+    const idle = powerMonitor.getSystemIdleTime();
+    if (idle >= 120 || (autostarted && process.uptime() < 300)) { log('avtomatik yangilanish: ' + s.latest); updater.install(); }
+  }, 30000);
+}
+ipcMain.handle('update-check', async (e, cached) => {
+  if (!updater) return { current: VERSION };
+  if (cached) return Object.assign({}, updater.state);
+  if (!PACKAGED) return Object.assign({}, updater.state, { error: 'Ishlab chiqish rejimi - yangilanish faqat o\'rnatilgan ilovada' });
+  return Object.assign({}, await updater.check());
+});
+ipcMain.handle('update-install', () => updater ? updater.install() : { ok: false, err: 'tayyor emas' });
+
 // ===================================================================== ishga tushirish
 function start() {
   if (pet || !cfg) return;
@@ -1485,6 +1666,7 @@ setInterval(() => { try { if (pet) sendPet('idle', powerMonitor.getSystemIdleTim
 
 app.on('second-instance', (e, argv) => {
   if (argv.includes('--autostart')) return;   // bir nechta avtomatik ishga tushirish usuli bir vaqtda ishlasa - jim
+  if (argv.includes('--yangilash')) { if (updater) updater.install(); return; }
   if (!cfg) return openSignin();
   if (argv.includes('--sozlamalar')) return openSettings(false);
   showPet(); sendPet('cmd', { name: 'chat' });
@@ -1494,6 +1676,15 @@ app.on('before-quit', () => { quitting = true; if (cfg) { saveConfig(); saveHist
 
 if (!skipRest) app.whenReady().then(() => {
   buildTray();
+  initUpdater();
+  if (process.argv.includes('--yangilash')) setTimeout(() => updater.install(), 3000);
+  // yangilangandan keyingi birinchi ishga tushish - "Ilovalar" ro'yxatidagi versiyani yangilaymiz va qahramon xabar beradi
+  if (appState.lastVersion !== VERSION) {
+    const was = appState.lastVersion;
+    appState.lastVersion = VERSION; saveAppState();
+    if (PACKAGED && INSTALLED) setTimeout(() => regAdd('DisplayVersion', 'REG_SZ', VERSION), 3000);
+    if (was) setTimeout(() => sendPet('cmd', { name: 'updated', version: VERSION }), 9000);
+  }
   screen.on('display-metrics-changed', fitPet);
   screen.on('display-added', fitPet);
   screen.on('display-removed', fitPet);

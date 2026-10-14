@@ -166,12 +166,18 @@
     } else if (S.thrown && v > 800) {
       setMode('land', 0.4); needs.fun += 4;
       think(pick(['Yana! Yana! 😆', 'Uchdim-a! ✈️', 'Uff! 😅', 'Juda zo\'r edi! 🤩']), 2.5);
+      if (p.id !== 'floor' && rnd() < 0.5) S.sitNext = true;
+    } else if (S.dropped && p.id !== 'floor') {
+      // foydalanuvchi ko'tarib, oyna ustiga tashladi - qo'ndi va xohlasa shu yerda o'tirib oladi
+      setMode('land', 0.3); needs.fun += 2;
+      think(pick(['Oyna ustiga tushdim! 😄', 'Yumshoq qo\'ndim 🪶', 'Bu yer menga yoqdi! 😊', 'Rahmat, olib chiqqaningiz uchun! 🥰']), 2.5);
+      if (rnd() < 0.65) S.sitNext = true;
     } else if (S.climbDone) {
       S.climbDone = false; needs.fun += 3;
       if (p.hang) { setMode('hang', R(5, 10)); think(pick(['Osilib turibman! 🐒', 'Voy, baland ekan! 😆', 'Qo\'limni qo\'yib yubormayman! 💪']), 3); }
       else { setMode('land', 0.3); think(pick(['Yuqoriga chiqdim! 🎉', "Bu yerdan hamma narsa ko'rinadi! 😄", 'Men eng balanddaman! 🏔️']), 3); }
     } else setMode('land', 0.25);
-    S.thrown = false;
+    S.thrown = false; S.dropped = false;
   }
 
   function airStep(dt) {
@@ -240,6 +246,15 @@
     if (cur.id === 'floor') return false;
     const goLeft = (t.x1 + t.x2) / 2 < S.x;
     const edge = goLeft ? cur.x1 : cur.x2, dir = goLeft ? -1 : 1;
+    // boshqa oyna (pastroqda yoki yonida) - aynan o'sha oyna ustiga mo'ljallab sakraydi
+    const tx = t.id !== 'floor' && !t.hang ? clamp(edge + dir * R(40, 130), t.x1 + 10, t.x2 - 10) : null;
+    if (tx != null && Math.sign(tx - edge) === dir && Math.abs(tx - edge) < 520) {
+      walkTo(edge, false, () => {
+        S.face = dir; think(pick(['Anavi oynaga sakrayman! 🐸', 'Bir, ikki... hop! 🤸', 'Uchdim! 🦸']), 1.5);
+        setMode('crouch', 0.35); S.afterCrouch = () => jumpTo(tx, t.y);
+      });
+      return true;
+    }
     walkTo(edge, false, () => { S.face = dir; think(pick(['Pastga sakrayman! 🪂', 'Hop! 🤸']), 1.5); hop(dir * R(110, 180), -R(320, 460), rnd() < 0.25 ? dir : 0); });
     return true;
   }
@@ -338,6 +353,7 @@
       case 'fall': return S.thrown ? 'kulgi' : 'qorqish';
       case 'thrown': return needs.fun > 40 ? 'kulgi' : 'qorqish';
       case 'think': return 'oylash';
+      case 'peek': return 'hayron';
       case 'dizzy': return 'boshaylanish';
       case 'laugh': case 'rofl': return 'kulgi';
       case 'sulk': return Math.floor(S.t / 5) % 2 ? 'jahl' : 'hafa';
@@ -381,6 +397,15 @@
       if (rnd() < 0.25) think(pick(['Hali ham arazman... 😤', 'Uzr so\'ramaguningizcha gaplashmayman! 😤', 'Hmph! 😒', 'Xafa qildingiz... 🥺']), 3);
       return setMode(rnd() < 0.7 ? 'sulk' : 'stomp', R(5, 10));
     }
+    if (S.sitNext) {
+      // oyna ustiga tashlangan edi - shu yerda o'tirib, oyoqlarini osiltirib dam oladi
+      S.sitNext = false;
+      if (S.plat && S.plat.id !== 'floor') {
+        setMode('sit', R(10, 22));
+        if (rnd() < 0.6) think(pick(["Shu yerda o'tiraman 😌", 'Bu yerdan hamma narsa ko\'rinadi! 👀', 'Qulay joy ekan ☺️']), 3);
+        return;
+      }
+    }
     if (S.chat) return setMode(rnd() < 0.25 ? 'look' : 'listen', R(2, 5));
     if (needs.energy < 15 || (idleSec > 600 && rnd() < 0.5)) return goSleep();
     if (needs.love < 18 && now() > S.nextSulk) {
@@ -391,7 +416,8 @@
     const onWin = S.plat && S.plat.id !== 'floor';
     const curNear = now() - cursor.t < 5000 && Math.hypot(cursor.x - S.x, cursor.y - S.y) < 350;
     const opts = [
-      ['wander', 30], ['run', 7], ['idle', 12], ['look', 7], ['sit', onWin ? 22 : 8], ['visit', plats.length > 1 ? 22 : 0],
+      ['wander', 30], ['run', 7], ['idle', 12], ['look', 7], ['sit', onWin ? 22 : 8], ['visit', plats.length > 1 ? (onWin ? 20 : 32) : 0],
+      ['peek', onWin && !S.plat.hang ? 8 : 0],
       ['dance', needs.fun < 45 ? 9 : 4], ['ball', needs.fun < 50 ? 8 : 3], ['bubbles', 4], ['cartwheel', needs.energy > 40 ? 3 : 0],
       ['wave', curNear ? 8 : 2], ['chase', curNear && needs.energy > 35 ? 5 : 0], ['yawn', needs.energy < 40 ? 7 : 1],
       ['stretch', 2], ['trip', 1], ['hop', 4], ['hum', 4],
@@ -417,6 +443,15 @@
         break;
       }
       case 'visit': if (!planVisit()) walkTo(R(p.x1, p.x2), false); break;
+      case 'peek': {
+        // oyna chetiga borib, pastga qiziqib qaraydi
+        const left = Math.abs(S.x - p.x1) < Math.abs(S.x - p.x2), ex = left ? p.x1 + 4 : p.x2 - 4;
+        walkTo(ex, false, () => {
+          S.face = left ? -1 : 1; setMode('peek', R(2.5, 4.5));
+          if (rnd() < 0.6) think(pick(['Pastda nima bor ekan? 👀', 'Voy, baland ekan! 😮', 'Salom, pastdagilar! 👋']), 2.5);
+        });
+        break;
+      }
       case 'dance': setMode('dance', R(4, 7)); if (rnd() < 0.4) think(pick(['La-la-la ♪', 'Raqs tushaman! 💃', 'Lapar! 🎶']), 2.5); break;
       case 'ball': setMode('ball', R(15, 28)); think(pick(["To'p o'ynaymiz! ⚽", 'Futbol! ⚽', 'Men Messiman! 😎']), 2); break;
       case 'bubbles': setMode('bubbles', R(5, 8)); break;
@@ -490,7 +525,7 @@
         }
       }
       if (S.plat && !S.dragging && (S.x < S.plat.x1 - 22 || S.x > S.plat.x2 + 22)) startFall();
-      if (S.modeT > S.dur && ['idle', 'look', 'listen', 'sit', 'dance', 'wave', 'yawn', 'stretch', 'trip', 'land', 'dizzy', 'laugh', 'cry', 'stomp', 'shy', 'sulk', 'rofl', 'hang'].includes(S.mode)) pickNext();
+      if (S.modeT > S.dur && ['idle', 'look', 'peek', 'listen', 'sit', 'dance', 'wave', 'yawn', 'stretch', 'trip', 'land', 'dizzy', 'laugh', 'cry', 'stomp', 'shy', 'sulk', 'rofl', 'hang'].includes(S.mode)) pickNext();
     }
     ballStep(dt);
     soapStep(dt);
@@ -513,6 +548,7 @@
       case 'crouch': sq = 0.86; armL = 30; armR = -30; break;
       case 'wave': armR = -150 + Math.sin(t * 14) * 24; head = 6; break;
       case 'look': head = Math.sin(t * 1.8) * 13; break;
+      case 'peek': head = 15 + Math.sin(t * 2.2) * 4; sq = 0.93; by = 3; armL = 35 + Math.sin(t * 3) * 6; armR = -35 - Math.sin(t * 3) * 6; break;
       case 'listen': head = 6 + Math.sin(t * 1.1) * 3; break;
       case 'sit': sit = 1; legL = 12 + Math.sin(t * 3) * 14; legR = -12 - Math.sin(t * 3 + 1) * 14; armL = 30; armR = -30; shadow = 0; head = Math.sin(t * 0.9) * 5; break;
       case 'sleep': sit = 1; head = 16; armL = 8; armR = -8; legL = 8; legR = -8; sq = 1 + Math.sin(t * 1.3) * 0.02; shadow = 0; break;
@@ -844,7 +880,7 @@
     const dx = e.clientX - press.x, dy = e.clientY - press.y;
     if (!press.moved && dx * dx + dy * dy > 49) {
       press.moved = true;
-      S.dragging = true; S.air = false; S.plat = null; S.climb = null; S.spin = 0; S.rot = 0;
+      S.dragging = true; S.air = false; S.plat = null; S.climb = null; S.spin = 0; S.rot = 0; S.sitNext = false;
       S.grabDx = S.x - press.x; S.grabDy = S.y - press.y;
       setMode('drag', 9999);
       interact('fun', 2);
@@ -867,8 +903,13 @@
       const vx = clamp((b.x - a.x) / dtt, -2400, 2400), vy = clamp((b.y - a.y) / dtt, -2400, 2400);
       const fast = Math.hypot(vx, vy) > 650;
       S.vx = fast ? vx * 0.85 : 0; S.vy = fast ? vy * 0.85 : 0;
-      S.air = true; S.plat = null; S.thrown = fast;
+      S.air = true; S.plat = null; S.thrown = fast; S.dropped = !fast;
       S.spin = Math.hypot(vx, vy) > 1600 ? (Math.sign(vx) || 1) : 0;
+      if (!fast) {
+        // oyna tepasidan sal pastroqda qo'yib yuborilsa ham - o'sha oyna ustiga "yopishadi"
+        const snap = plats.filter(q => q.id !== 'floor' && !q.hang && S.y > q.y && S.y - q.y < 50 && S.x >= q.x1 - 20 && S.x <= q.x2 + 20).sort((a, b) => a.y - b.y)[0];
+        if (snap) S.y = snap.y - 1;
+      }
       setMode(fast ? 'thrown' : 'fall', 99);
     } else {
       if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; tickle(); }
@@ -997,6 +1038,17 @@
       case 'sleep': if (S.mode === 'sleep') wake('Uyg\'ondim! ☀️'); else if (grounded()) goSleep(); break;
       case 'reset': api.resetChat(); think('Yangi suhbat boshladik! Avvalgi gaplarni unutdim 🙂', 3); break;
       case 'saved': think(U('Rahmat, {u}! Sozlamalar saqlandi 😊'), 3); if (grounded()) setMode('wave', 2); break;
+      case 'update':
+        if (S.mode === 'sleep') setMode('idle', 0.5);
+        setMood('hayron', 6);
+        think(U(`{u}, yangi versiyam chiqibdi (${c.version})! ✨ Tray menyusidan "Yangilash" ni bosing`), 7);
+        if (grounded()) hop(0, -460);
+        break;
+      case 'updated':
+        setMood('xursand', 8);
+        think(U(`Yangilandim! Endi ${c.version} versiyadaman ✨`), 5);
+        if (grounded()) setMode('dance', 3);
+        break;
       case 'remind':
         if (S.mode === 'sleep') setMode('idle', 0.5);
         setMood('hayron', 6);

@@ -39,13 +39,32 @@
     #moods span { font-size: 11px; background: rgba(255,255,255,.7); padding: 3px 8px; border-radius: 10px; cursor: pointer; }
     #moods span:hover { background: #fff; }
     a { color: #C06A0A; cursor: pointer; text-decoration: underline; }
-    .acc { background: #fff; border: 1.5px solid #F0D9B0; border-radius: 16px; padding: 4px 14px 12px; }
-    .chips { display: flex; gap: 10px; margin-top: 10px; }
-    .chip { flex: 1; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: #FFF6E6; border: 1.5px solid #F0D9B0; font-size: 13px; }
-    .chip span { flex: 1; color: #8A7560; }
-    .chip.on { background: #EAF7EA; border-color: #9CD39C; } .chip.on span { color: #2E7D32; font-weight: 600; }
-    .chip.on .mini { display: none; }
-    .mini { padding: 4px 10px !important; font-size: 12.5px !important; }
+    .keys { display: flex; flex-direction: column; gap: 10px; }
+    .kr { background: #fff; border: 2px solid #F0D9B0; border-radius: 16px; padding: 11px 13px; transition: border-color .2s; }
+    .kr.good { border-color: #8FD19A; } .kr.bad { border-color: #EF9A9A; }
+    .kh { display: flex; align-items: center; gap: 10px; }
+    .kic { font-size: 24px; width: 30px; text-align: center; }
+    .kt { flex: 1; min-width: 0; } .kt b { font-size: 14.5px; color: #0E6472; } .kt i { font-weight: 400; color: #8A7560; font-size: 12.5px; }
+    .ks { font-size: 12px; color: #8A7560; margin-top: 1px; }
+    .badge { flex: none; font-size: 12.5px; font-weight: 700; padding: 4px 11px; border-radius: 20px; background: #F1EADF; color: #8A7560; white-space: nowrap; }
+    .badge.on { background: #E3F5E5; color: #2E7D32; } .badge.off { background: #FDE7E7; color: #C62828; }
+    .badge.wait { background: #FFF3CD; color: #8A6100; } .badge.saved { background: #E6F4F8; color: #0E6472; }
+    .kin { display: flex; gap: 7px; align-items: center; margin-top: 9px; }
+    .kin input { flex: 1; min-width: 0; font-family: Consolas, 'Segoe UI', monospace; font-size: 13.5px; }
+    .kin .btn { flex: none; padding: 8px 12px; font-size: 13.5px; white-space: nowrap; }
+    .kin .btn.ico { padding: 8px 9px; }
+    .kin .btn.test { background: linear-gradient(#2EC4D6, #158FA3); color: #fff; border: none; font-weight: 700; box-shadow: 0 3px 8px rgba(21,143,163,.3); }
+    .kin .btn.test:hover { filter: brightness(1.06); }
+    .kin .btn:disabled { opacity: .55; cursor: default; }
+    .kpath { flex: 1; min-width: 0; font-size: 12.5px; color: #8A7560; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 2px; }
+    .res { margin-top: 8px; padding: 8px 11px; border-radius: 10px; font-size: 13px; line-height: 1.4; background: #F6F1E8; color: #5A4632; }
+    .res.on { background: #E9F7EB; color: #1E6B23; } .res.off { background: #FDECEC; color: #B71C1C; } .res.wait { background: #FFF8E1; color: #7A5600; }
+    .res a { color: inherit; font-weight: 600; }
+    .sub2 { margin-top: 11px; padding-top: 10px; border-top: 1.5px dashed #F0D9B0; }
+    .kh2 { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #8A7560; } .kh2 > span:first-child { flex: 1; } .kh2 b { color: #5A4632; }
+    .upd { display: flex; align-items: center; gap: 12px; background: #fff; border: 2px solid #F0D9B0; border-radius: 16px; padding: 11px 13px; }
+    .upd .kt b { font-size: 14.5px; }
+    .bar { height: 8px; border-radius: 6px; background: #F1EADF; overflow: hidden; margin-top: 8px; } .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #2EC4D6, #158FA3); transition: width .2s; }
     .hidden { display: none !important; }
     .mem { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #F0DDBB; border-radius: 10px; padding: 6px 10px; margin: 4px 0; font-size: 13.5px; }
     .mem span { flex: 1; } .mem button { border: none; background: none; cursor: pointer; color: #C62828; font-size: 15px; }
@@ -55,6 +74,88 @@
   <div id="form">
     <h1 id="title">Sozlamalar</h1>
     <div class="sub" id="subtitle">Yordamchingizni o'zingizga moslang</div>
+
+    <h2>🔑 AI ulanishlari va API kalitlar</h2>
+    <div class="keys">
+      <!-- Claude Code -->
+      <div class="kr" id="krClaude">
+        <div class="kh">
+          <span class="kic">🧠</span>
+          <div class="kt"><b>Claude Code</b><div class="ks">Vazifalar uchun: dastur ochish, Telegram'ga yozish, fayllar, hisob-kitob</div></div>
+          <span class="badge" id="bClaude">…</span>
+        </div>
+        <div class="kin">
+          <div class="kpath" id="claudeWhere">qidirilmoqda...</div>
+          <button class="btn hidden" id="claudeInstall">⬇ O'rnatish</button>
+          <button class="btn" id="claudeConnect">🔑 Kirish (Sign in)</button>
+          <button class="btn test" id="claudeTest">✅ Tekshirish</button>
+        </div>
+        <div class="res hidden" id="rClaude"></div>
+        <div id="codeRow" class="kin hidden">
+          <input id="authCode" type="text" placeholder="Brauzer bergan kodni shu yerga qo'ying">
+          <button class="btn" id="sendCode">Yuborish</button>
+        </div>
+        <div class="sub2" id="krClaudeKey">
+          <div class="kh2"><span>…yoki <b>Claude kaliti / tokeni</b> bilan ulang · <a data-url="https://console.anthropic.com/settings/keys">API kalit olish ↗</a> · <a id="claudeToken">obuna tokenini olish ↗</a></span><span class="badge" id="bClaudeKey">…</span></div>
+          <div class="kin">
+            <input id="ClaudeKey" type="password" spellcheck="false" autocomplete="off" placeholder="Claude kalitini shu yerga qo'ying: sk-ant-...">
+            <button class="btn ico" id="eyeClaudeKey" title="Kalitni ko'rsatish / yashirish">👁</button>
+            <button class="btn" id="pasteClaudeKey" title="Nusxalangan kalitni qo'yish">📋 Qo'yish</button>
+            <button class="btn test" id="testClaudeKey">✅ Tekshirish</button>
+            <button class="btn ico hidden" id="delClaudeKey" title="Kalitni o'chirish">🗑</button>
+          </div>
+          <div class="res hidden" id="rClaudeKey"></div>
+        </div>
+      </div>
+
+      <!-- Gemini -->
+      <div class="kr" id="krGemini">
+        <div class="kh">
+          <span class="kic">✨</span>
+          <div class="kt"><b>Gemini API kaliti</b><div class="ks">Tez suhbat uchun (bepul) · <a data-url="https://aistudio.google.com/apikey">kalitni olish ↗</a></div></div>
+          <span class="badge" id="bGemini">…</span>
+        </div>
+        <div class="kin">
+          <input id="GeminiKey" type="password" spellcheck="false" autocomplete="off" placeholder="Gemini kalitini shu yerga qo'ying: AIza... yoki AQ....">
+          <button class="btn ico" id="eyeGemini" title="Kalitni ko'rsatish / yashirish">👁</button>
+          <button class="btn" id="pasteGemini" title="Nusxalangan kalitni qo'yish">📋 Qo'yish</button>
+          <button class="btn test" id="testGemini">✅ Tekshirish</button>
+          <button class="btn ico hidden" id="delGemini" title="Kalitni o'chirish">🗑</button>
+        </div>
+        <div class="res hidden" id="rGemini"></div>
+      </div>
+
+      <!-- Groq -->
+      <div class="kr" id="krGroq">
+        <div class="kh">
+          <span class="kic">🚀</span>
+          <div class="kt"><b>Groq API kaliti <i>(ixtiyoriy)</i></b><div class="ks">Gemini ishlamasa - zaxira tez suhbat · <a data-url="https://console.groq.com/keys">kalitni olish ↗</a></div></div>
+          <span class="badge" id="bGroq">…</span>
+        </div>
+        <div class="kin">
+          <input id="GroqKey" type="password" spellcheck="false" autocomplete="off" placeholder="Groq kalitini shu yerga qo'ying: gsk_...">
+          <button class="btn ico" id="eyeGroq" title="Kalitni ko'rsatish / yashirish">👁</button>
+          <button class="btn" id="pasteGroq" title="Nusxalangan kalitni qo'yish">📋 Qo'yish</button>
+          <button class="btn test" id="testGroq">✅ Tekshirish</button>
+          <button class="btn ico hidden" id="delGroq" title="Kalitni o'chirish">🗑</button>
+        </div>
+        <div class="res hidden" id="rGroq"></div>
+      </div>
+      <div class="note" style="margin:2px 4px 0">Kalitni saytdan nusxalang (Copy) → <b>📋 Qo'yish</b> → <b>✅ Tekshirish</b>. Kalit ishlasa, darhol saqlanadi va Mittivoy shu zahoti undan foydalanadi. Kalitlar faqat sizning hisobingizda, shifrlangan holda saqlanadi.</div>
+    </div>
+
+    <h2>🔄 Yangilanish</h2>
+    <div class="upd" id="krUpdate">
+      <span class="kic">🔄</span>
+      <div class="kt" style="flex:1">
+        <b>Mittivoy <span id="curVer"></span></b>
+        <div class="ks" id="updText">Yangi versiya GitHub'dan tekshiriladi</div>
+        <div class="bar hidden" id="updBar"><i id="updFill"></i></div>
+      </div>
+      <button class="btn" id="updCheck">🔍 Yangilanishni tekshirish</button>
+      <button class="btn test hidden" id="updGo" style="background:linear-gradient(#5CC96B,#2E9B3E);color:#fff;border:none;font-weight:700">⬇ Yangilash</button>
+    </div>
+    <label class="chk" style="margin-top:8px"><input type="checkbox" id="AutoUpdate"><span>Yangi versiya chiqsa, o'zi yuklab olib o'rnatsin (kompyuterdan foydalanmayotganingizda)</span></label>
 
     <h2>Tanishuv</h2>
     <div class="row">
@@ -92,31 +193,8 @@
     </select>
     <div class="note">Aqlli rejimda oddiy gap-so'z, hol-ahvol va hazillarga Gemini darhol javob beradi. Dastur ochish, Telegram'ga yozish, fayllar, hisob-kitob, algoritm, kod va internetdan ma'lumot kerak bo'lsa - Claude o'zi kompyuterda bajaradi. Gemini kaliti bo'lmasa, suhbat kalitsiz bepul serverda bo'ladi.</div>
 
-    <h2>🔐 Hisoblarga ulanish</h2>
-    <div class="acc">
-      <label>Emailingiz</label>
-      <div class="row" style="align-items:center">
-        <div style="flex:3"><input id="accEmail" type="text" placeholder="ism@gmail.com"></div>
-        <div style="flex:none"><button class="btn primary" id="connectAll" style="padding:10px 18px">🔑 Hisobga kirish</button></div>
-      </div>
-      <div class="chips">
-        <div class="chip" id="chipClaude"><b>🧠 Claude</b><span id="stClaude">tekshirilmoqda...</span><button class="btn mini" id="connClaude">Ulash</button></div>
-        <div class="chip" id="chipGemini"><b>✨ Gemini</b><span id="stGemini">...</span><button class="btn mini" id="connGemini">Ulash</button></div>
-      </div>
-      <div class="row" style="align-items:center;margin-top:10px">
-        <div style="flex:3"><input id="gemQuick" type="password" placeholder="Gemini kalitini shu yerga qo'ying (AIza... yoki AQ....)"></div>
-        <div style="flex:none"><button class="btn primary" id="gemSave" style="padding:9px 16px">✨ Gemini'ni saqlash</button></div>
-      </div>
-      <div id="authLog" class="note hidden"></div>
-      <div id="codeRow" class="row hidden" style="align-items:center">
-        <div style="flex:3"><input id="authCode" type="text" placeholder="Brauzer bergan kodni shu yerga qo'ying"></div>
-        <div style="flex:none"><button class="btn" id="sendCode">Yuborish</button></div>
-      </div>
-      <div class="note">"Hisobga kirish" bosilganda: 1) brauzerda Claude kirish sahifasi emailingiz bilan ochiladi - tasdiqlang; 2) so'ng Google AI Studio ochiladi - "Create API key" ni bosib, kalitni nusxalang (Copy). Mittivoy kalitni o'zi topib, tekshirib, saqlaydi.</div>
-    </div>
-
     <details style="margin-top:10px">
-      <summary style="cursor:pointer;color:#8A7560;font-size:13px">Qo'shimcha (qo'lda kiritish)</summary>
+      <summary style="cursor:pointer;color:#8A7560;font-size:13px">Qo'shimcha: Claude Code yo'lini qo'lda ko'rsatish</summary>
       <label>Claude Code yo'li</label>
       <div class="row" style="align-items:center">
         <div style="flex:3"><input id="ClaudePath" type="text" placeholder="bo'sh qolsa - avtomatik topiladi"></div>
@@ -124,10 +202,6 @@
         <div style="flex:none"><button class="btn" id="login">Terminal orqali kirish</button></div>
       </div>
       <div id="ok"></div>
-      <div class="row">
-        <div><label>Gemini kaliti · <a data-url="https://aistudio.google.com/apikey">kalit olish ↗</a></label><input id="GeminiKey" type="password" placeholder="AIza..."></div>
-        <div><label>Groq kaliti (ixtiyoriy) · <a data-url="https://console.groq.com/keys">kalit olish ↗</a></label><input id="GroqKey" type="password" placeholder="gsk_..."></div>
-      </div>
     </details>
 
     <h2>Xulq-atvor</h2>

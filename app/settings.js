@@ -5,84 +5,168 @@
   const { cfg, found, profile } = await api.settingsGet();
   const c = Object.assign({}, cfg);
   $('who').textContent = profile.name;
-  $('accEmail').value = profile.email || '';
   $('logout').addEventListener('click', () => api.logout());
 
-  // ---- hisoblar holati
-  function chip(which, on, text) {
-    $('chip' + which).classList.toggle('on', on);
-    $('st' + which).textContent = text;
+  // ---- AI ulanishlari: holat belgisi (badge), ramka rangi va natija qatori
+  function badge(which, cls, text) { const b = $('b' + which); b.className = 'badge ' + cls; b.textContent = text; }
+  function result(which, cls, text) {
+    const r = $('r' + which);
+    r.className = 'res ' + cls; r.textContent = text;
+    $('kr' + which).classList.toggle('good', cls === 'on');
+    $('kr' + which).classList.toggle('bad', cls === 'off');
   }
+  const secs = ms => (ms / 1000).toFixed(1).replace('.', ',') + ' soniya';
+
+  // Claude Code
   async function refreshClaude() {
     const s = await api.claudeStatus();
-    if (s.missing) chip('Claude', false, "Claude Code o'rnatilmagan");
-    else chip('Claude', s.loggedIn, s.loggedIn ? '✓ ulangan' + (s.email ? ' (' + s.email + ')' : '') : 'ulanmagan');
+    $('claudeInstall').classList.toggle('hidden', !s.missing);
+    $('claudeConnect').classList.toggle('hidden', !!s.missing || !!s.loggedIn);
+    if (s.missing) { badge('Claude', 'off', "✗ O'rnatilmagan"); $('claudeWhere').textContent = 'Claude Code bu kompyuterda topilmadi'; }
+    else if (s.loggedIn) { badge('Claude', 'on', '✓ Ulangan'); $('claudeWhere').textContent = 'Hisob: ' + (s.email || 'claude.ai'); }
+    else { badge('Claude', 'off', '✗ Ulanmagan'); $('claudeWhere').textContent = "Claude Code bor, lekin hisobga kirilmagan"; }
     return s;
   }
-  function refreshGemini() {
-    const k = $('GeminiKey').value.trim();
-    chip('Gemini', !!k, k ? '✓ kalit bor' : 'ulanmagan');
+  async function testClaude() {
+    $('claudeTest').disabled = true;
+    badge('Claude', 'wait', '⏳ Tekshirilmoqda');
+    result('Claude', 'wait', "Claude'ga sinov xabari yuborilyapti... (10-30 soniya)");
+    const r = await api.checkClaude();
+    $('claudeTest').disabled = false;
+    await refreshClaude();
+    if (r.ok) { badge('Claude', 'on', '✓ Ishlayapti'); result('Claude', 'on', `✓ Claude ishlayapti! Javob ${secs(r.ms)}da keldi. Endi Mittivoy dastur ochish, Telegram'ga yozish kabi vazifalarni bajara oladi.`); }
+    else { badge('Claude', 'off', '✗ Ishlamayapti'); result('Claude', 'off', '✗ ' + r.err); }
   }
-  refreshClaude(); refreshGemini();
-  $('GeminiKey').addEventListener('input', refreshGemini);
-
-  function authLog(text) { const l = $('authLog'); l.classList.remove('hidden'); l.textContent = text; }
+  async function connectClaude() {
+    const s0 = await refreshClaude();
+    if (s0.loggedIn) return testClaude();
+    $('claudeConnect').disabled = true;
+    badge('Claude', 'wait', '⏳ Kirish kutilmoqda');
+    result('Claude', 'wait', 'Brauzerda Claude kirish sahifasi ochiladi - hisobingiz bilan kirib, "Authorize" ni bosing.');
+    const r = await api.connectClaude(profile.email || '');
+    $('claudeConnect').disabled = false;
+    $('codeRow').classList.add('hidden');
+    if (r.ok) { await refreshClaude(); testClaude(); }
+    else { await refreshClaude(); result('Claude', 'off', '✗ ' + (r.err || 'Ulanmadi')); }
+  }
+  async function installClaude() {
+    $('claudeInstall').disabled = true;
+    badge('Claude', 'wait', "⏳ O'rnatilmoqda");
+    result('Claude', 'wait', "Ko'k oyna ochildi - Claude Code rasmiy saytdan o'rnatilmoqda (1-3 daqiqa). Tugashini kuting...");
+    const r = await api.installClaude();
+    $('claudeInstall').disabled = false;
+    await refreshClaude();
+    if (r.ok) { result('Claude', 'on', '✓ Claude Code o\'rnatildi! Endi "Ulash" ni bosing.'); }
+    else result('Claude', 'off', '✗ ' + r.err);
+  }
   api.on('auth-log', d => {
     if (d.url) {
-      authLog('');
+      const r = $('rClaude'); r.className = 'res wait';
+      r.textContent = 'Brauzerda kiring va tasdiqlang. ';
       const a = document.createElement('a'); a.textContent = 'Brauzer ochilmadimi? Shu yerni bosing ↗';
       a.addEventListener('click', () => api.openExternal(d.url));
-      $('authLog').appendChild(a);
-    } else if (d.text) authLog(d.text);
+      r.appendChild(a);
+    } else if (d.text) result('Claude', 'wait', d.text);
     if (d.text && /code|kod/i.test(d.text)) {
       $('codeRow').classList.remove('hidden');
-      if (/invalid code/i.test(d.text)) authLog("Kod noto'g'ri qo'yildi. Brauzerdagi kodni oxirigacha to'liq nusxalang (\"Copy Code\" tugmasi bilan) va qaytadan qo'ying. Bo'lmasa, \"Terminal orqali kirish\" tugmasini bosing.");
+      if (/invalid code/i.test(d.text)) result('Claude', 'off', "Kod noto'g'ri qo'yildi. Brauzerdagi kodni \"Copy Code\" tugmasi bilan to'liq nusxalang va qaytadan qo'ying.");
     }
   });
   $('sendCode').addEventListener('click', () => { api.authCode($('authCode').value); $('authCode').value = ''; });
+  $('claudeTest').addEventListener('click', testClaude);
+  $('claudeConnect').addEventListener('click', connectClaude);
+  $('claudeInstall').addEventListener('click', installClaude);
+  refreshClaude();
 
-  async function connectClaude() {
-    const s0 = await refreshClaude();
-    if (s0.loggedIn) return true;
-    if (s0.missing) { api.openExternal('https://claude.com/claude-code'); authLog("Avval Claude Code'ni o'rnating (Claude ilovasini o'rnatsangiz ham bo'ladi), so'ng qaytadan bosing."); return false; }
-    chip('Claude', false, '⏳ brauzerda kiring...');
-    authLog('Brauzerda Claude kirish sahifasi ochildi - hisobingiz bilan tasdiqlang.');
-    const r = await api.connectClaude($('accEmail').value.trim());
-    await refreshClaude();
-    if (r.ok) { authLog('✓ Claude ulandi!'); $('codeRow').classList.add('hidden'); return true; }
-    authLog('Claude: ' + (r.err || 'ulanmadi'));
-    return false;
-  }
-  async function connectGemini() {
-    chip('Gemini', false, '⏳ kalitni nusxalang...');
-    authLog('Google AI Studio ochildi: "Create API key" ni bosing va kalitni nusxalang (Copy). Qolganini o\'zim qilaman.');
-    const r = await api.connectGemini();
-    if (r.ok) { $('GeminiKey').value = r.key; c.GeminiKey = r.key; authLog('✓ Gemini ulandi!'); }
-    else authLog('Gemini: ' + (r.err || 'ulanmadi'));
-    refreshGemini();
-    return r.ok;
-  }
-  // kalitni qo'lda qo'yish: tekshiradi va darhol saqlaydi ("Saqlash" bosish shart emas)
-  async function saveGem() {
-    const k = $('gemQuick').value.trim();
-    if (!k) { authLog('Avval Gemini kalitini maydonga qo\'ying (Ctrl+V)'); return; }
-    $('gemSave').disabled = true; chip('Gemini', false, '⏳ tekshirilmoqda...');
-    const r = await api.saveGeminiKey(k);
-    $('gemSave').disabled = false;
-    if (r.ok) { $('GeminiKey').value = k; c.GeminiKey = k; $('gemQuick').value = ''; authLog('✓ Gemini ulandi va saqlandi!'); }
-    else authLog('Gemini: ' + r.err);
-    refreshGemini();
-  }
-  $('gemSave').addEventListener('click', saveGem);
-  $('gemQuick').addEventListener('keydown', e => { if (e.key === 'Enter') saveGem(); });
-  $('connClaude').addEventListener('click', connectClaude);
-  $('connGemini').addEventListener('click', connectGemini);
-  $('connectAll').addEventListener('click', async () => {
-    $('connectAll').disabled = true;
-    await connectClaude();
-    if (!$('GeminiKey').value.trim()) await connectGemini();
-    $('connectAll').disabled = false;
+  $('claudeToken').addEventListener('click', async () => {
+    const r = await api.claudeSetupToken();
+    result('ClaudeKey', r.ok ? 'wait' : 'off', r.ok ? "Qora oyna ochildi: brauzerda Claude hisobingizga kiring. Oxirida chiqqan sk-ant-oat... tokenni nusxalab, shu maydonga qo'ying va ✅ Tekshirish ni bosing." : '✗ ' + r.err);
   });
+
+  // API kalitlar (Gemini, Groq, Claude): qo'yish -> tekshirish -> (ishlasa) darhol saqlash
+  const KEYS = { Gemini: { id: 'GeminiKey', which: 'gemini' }, Groq: { id: 'GroqKey', which: 'groq' }, ClaudeKey: { id: 'ClaudeKey', which: 'claude' } };
+  const mask = k => k.length > 12 ? k.slice(0, 6) + '…' + k.slice(-4) : '…';
+  function keyIdle(name) {
+    const k = $(KEYS[name].id).value.trim(), saved = (c[KEYS[name].id] || '') === k && !!k;
+    $('del' + name).classList.toggle('hidden', !c[KEYS[name].id]);
+    if (!k) badge(name, '', name === 'Gemini' ? "Kalit yo'q" : 'Ixtiyoriy');
+    else if (saved) badge(name, 'saved', 'Saqlangan ' + mask(k));
+    else badge(name, 'wait', 'Tekshirilmagan');
+  }
+  async function testKey(name, quiet) {
+    const { id, which } = KEYS[name];
+    const k = $(id).value.replace(/\s+/g, '');
+    $(id).value = k;
+    if (!k) { result(name, 'off', "Avval kalitni maydonga qo'ying: saytdan nusxalang (Copy), so'ng 📋 Qo'yish tugmasini bosing."); return; }
+    $('test' + name).disabled = true;
+    badge(name, 'wait', '⏳ Tekshirilmoqda');
+    if (!quiet) result(name, 'wait', which === 'claude' ? "Claude'ga sinov xabari yuborilyapti... (10-30 soniya)" : 'Kalit tekshirilmoqda...');
+    const r = await api.checkKey(which, k, true);
+    $('test' + name).disabled = false;
+    if (r.ok) {
+      c[id] = k;
+      badge(name, 'on', '✓ Ishlayapti');
+      result(name, 'on', (r.warn ? '✓ ' + r.warn : `✓ Kalit ishlayapti! Javob ${secs(r.ms)}da keldi.`) + (r.saved ? ' Kalit saqlandi - Mittivoy undan foydalanyapti.' : ''));
+      $('del' + name).classList.remove('hidden');
+      if (which === 'claude') { await refreshClaude(); badge('Claude', 'on', '✓ Ishlayapti'); }
+    } else {
+      badge(name, 'off', '✗ Ishlamayapti');
+      result(name, 'off', '✗ ' + r.err + ' ');
+      if (r.url) {   // masalan: Vertex AI API yoqilmagan - Google'ning aniq "yoqish" sahifasi
+        const a = document.createElement('a'); a.textContent = 'Yoqish ↗';
+        a.addEventListener('click', () => api.openExternal(r.url));
+        $('r' + name).appendChild(a);
+      }
+    }
+  }
+  for (const name of Object.keys(KEYS)) {
+    const inp = $(KEYS[name].id);
+    inp.value = c[KEYS[name].id] || '';
+    keyIdle(name);
+    inp.addEventListener('input', () => { keyIdle(name); $('r' + name).classList.add('hidden'); $('kr' + name).classList.remove('good', 'bad'); });
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') testKey(name); });
+    inp.addEventListener('paste', () => setTimeout(() => testKey(name), 50));   // Ctrl+V qilinsa - darhol tekshiradi
+    $('test' + name).addEventListener('click', () => testKey(name));
+    $('eye' + name).addEventListener('click', () => { inp.type = inp.type === 'password' ? 'text' : 'password'; });
+    $('paste' + name).addEventListener('click', async () => {
+      const t = (await api.clipboardText()).replace(/\s+/g, '');
+      if (!t) { result(name, 'off', "Buferda hech narsa yo'q. Avval saytdan kalitni nusxalang (Copy)."); return; }
+      inp.value = t; keyIdle(name); testKey(name);
+    });
+    $('del' + name).addEventListener('click', async () => {
+      if (!confirm(name + ' kaliti o\'chirilsinmi?')) return;
+      await api.removeKey(KEYS[name].which);
+      c[KEYS[name].id] = ''; inp.value = ''; keyIdle(name);
+      result(name, '', 'Kalit o\'chirildi.');
+    });
+    if (inp.value && name !== 'ClaudeKey') testKey(name, true);   // saqlangan kalit hozir ham ishlayaptimi - oynani ochishda o'zi tekshiradi
+  }
+
+  // ---- yangilanish (GitHub relizlari)
+  function updShow(u) {
+    $('updGo').classList.toggle('hidden', !(u && u.available) || !!u.busy);
+    $('updCheck').disabled = !!(u && u.busy);
+    $('updBar').classList.toggle('hidden', !(u && u.busy));
+    if (u && u.busy) $('updFill').style.width = Math.round((u.progress || 0) * 100) + '%';
+    const t = $('updText');
+    t.style.color = u && u.error ? '#C62828' : u && u.available ? '#2E7D32' : '';
+    t.style.fontWeight = u && u.available ? '700' : '';
+    if (!u) t.textContent = "Yangi versiya GitHub'dan tekshiriladi";
+    else if (u.busy) t.textContent = u.stage || 'Yuklanmoqda...';
+    else if (u.error) t.textContent = '✗ ' + u.error;
+    else if (u.available) t.textContent = `✨ Yangi versiya bor: ${u.latest}! "Yangilash" ni bosing - ${u.lite ? '1-2 soniyada' : '1-2 daqiqada'} o'rnatiladi.`;
+    else if (u.latest) t.textContent = `✓ Sizda eng so'nggi versiya (${u.latest})`;
+  }
+  const u0 = await api.updateCheck(true);   // keshdagi holat - internetga chiqmaydi
+  $('curVer').textContent = u0.current || '';
+  if (u0.latest || u0.busy) updShow(u0);
+  api.on('update-state', updShow);
+  $('updCheck').addEventListener('click', async () => {
+    $('updCheck').disabled = true; $('updText').textContent = '⏳ GitHub tekshirilmoqda...'; $('updText').style.color = '';
+    updShow(await api.updateCheck());
+    $('updCheck').disabled = false;
+  });
+  $('updGo').addEventListener('click', async () => { const r = await api.updateInstall(); if (r && !r.ok) updShow({ error: r.err }); });
 
   // ---- xotira
   function renderMem(list) {
@@ -109,6 +193,7 @@
   for (const k of ['UserName', 'PetName', 'ClaudePath', 'GroqKey', 'GeminiKey']) $(k).value = c[k] || '';
   for (const k of ['Skin', 'Hair', 'Provider']) $(k).value = c[k] || $(k).options[0].value;
   for (const k of ['FullAccess', 'Chatty', 'Autostart']) $(k).checked = !!c[k];
+  $('AutoUpdate').checked = c.AutoUpdate !== false;
 
   document.querySelectorAll('.cards').forEach(group => {
     const key = group.dataset.key;
@@ -162,9 +247,9 @@
       $('subtitle').style.color = '#C62828';
       return;
     }
-    for (const k of ['ClaudePath', 'GroqKey', 'GeminiKey']) c[k] = $(k).value.trim();
+    for (const k of ['ClaudePath', 'GroqKey', 'GeminiKey', 'ClaudeKey']) c[k] = $(k).value.replace(/\s+/g, '');
     for (const k of ['Skin', 'Hair', 'Provider']) c[k] = $(k).value;
-    for (const k of ['FullAccess', 'Chatty', 'Autostart']) c[k] = $(k).checked;
+    for (const k of ['FullAccess', 'Chatty', 'Autostart', 'AutoUpdate']) c[k] = $(k).checked;
     api.settingsSave(c);
   });
   $('cancel').addEventListener('click', () => api.settingsCancel());

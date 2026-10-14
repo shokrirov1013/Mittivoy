@@ -30,7 +30,16 @@ Copy-Item (Join-Path $Src 'OQING.txt') (Join-Path $stage "O'QING.txt")
 $bad = Get-ChildItem $stage -Recurse -File | Where-Object { $_.Name -in @('config.json', 'google.json', 'app.json', 'memory.json', 'history.json', 'session.bin') }
 if ($bad) { throw "Shaxsiy fayl topildi: $($bad.FullName)" }
 
+$pj = Get-Content (Join-Path $stage 'resources\app\package.json') -Raw | ConvertFrom-Json
+if ($pj.version -ne $Version) { throw "package.json versiyasi ($($pj.version)) -Version ($Version) bilan mos emas" }
+
 $zip = Join-Path $root "Mittivoy-$Version-Windows.zip"
 Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal
 "o'rnatilgan hajm: {0:N0} MB" -f ((Get-ChildItem $stage -Recurse -File | Measure-Object Length -Sum).Sum / 1MB)
 "ZIP: {0:N1} MB -> {1}" -f ((Get-Item $zip).Length / 1MB), $zip
+
+# --- yengil yangilanish arxivi: faqat ilova kodi (Electron o'zgarmagan bo'lsa, ilova shuni yuklab oladi)
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$lite = Join-Path $root "Mittivoy-$Version-app-electron-$ver.zip"
+[System.IO.Compression.ZipFile]::CreateFromDirectory((Join-Path $stage 'resources\app'), $lite, [System.IO.Compression.CompressionLevel]::Optimal, $false)
+"yengil yangilanish: {0:N0} KB -> {1}" -f ((Get-Item $lite).Length / 1KB), $lite

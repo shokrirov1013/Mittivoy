@@ -1,4 +1,4 @@
-MITTIVOY 2.6.2 - o'zbekcha AI yordamchi (Windows uchun)
+MITTIVOY 2.7.0 - o'zbekcha AI yordamchi (Windows uchun)
 =====================================================
 
 Ekraningizda yashaydigan kichkina qizaloq yoki bolakay: sayr qiladi, oynalar ustiga chiqib
@@ -23,7 +23,7 @@ HISOB (SERVERDA)
     kirsangiz - qahramoningiz, sozlamalaringiz va xotirasi o'sha yerda ham paydo bo'ladi.
   - Shu kompyuterda bir marta kirsangiz, qayta so'ralmaydi ("Profildan chiqish" bosilmaguncha).
   - Parolni unutsangiz: kirish oynasida "Parolni unutdingizmi?" -> emailga havola keladi.
-  - Har bir foydalanuvchining ma'lumotlari faqat o'ziga ko'rinadi. Gemini/Groq kalitlari
+  - Har bir foydalanuvchining ma'lumotlari faqat o'ziga ko'rinadi. Gemini/Groq/Claude kalitlari
     parolingiz bilan shifrlanib saqlanadi.
 
 
@@ -39,12 +39,27 @@ BEPUL VA DARHOL BAJARADIGAN ISHLARI (internet bo'lsa yetarli, hisob shart emas)
   "Latifa aytib ber" ........................ kuldiradi
 
 
-AQLLIROQ BO'LISHI UCHUN (Sozlamalar -> "Hisobga kirish")
---------------------------------------------------------
-  - Gemini (bepul): oddiy suhbatga juda tez javob beradi. Google AI Studio'da
-    "Create API key" -> Copy. Mittivoy kalitni o'zi topib saqlaydi.
+AQLLIROQ BO'LISHI UCHUN (Sozlamalar -> "AI ulanishlari va API kalitlar")
+------------------------------------------------------------------------
+Qahramonni o'ng tugma bilan bosing -> Sozlamalar. Eng tepada har bir AI uchun alohida qator bor:
+  - Gemini (bepul): oddiy suhbatga juda tez javob beradi. aistudio.google.com/apikey da
+    "Create API key" -> Copy -> Mittivoy'da "Qo'yish" -> "Tekshirish".
+    Ishlasa yashil "Ishlayapti" chiqadi va kalit darhol saqlanadi.
+    "AQ." bilan boshlanadigan (Vertex) kalit uchun Google Cloud'da "Vertex AI API" yoqilgan
+    bo'lishi kerak - aks holda natijada "Yoqish" havolasi chiqadi.
   - Claude: kompyuterda murakkab ishlarni bajaradi (Telegram'da kontaktga yozish,
-    ilovalar ichida ishlash, fayllar, hisob-kitob, algoritm). Claude Pro/Max hisobi kerak.
+    ilovalar ichida ishlash, fayllar, hisob-kitob, algoritm). Ikki yo'l bilan ulanadi:
+      1) "Kirish (Sign in)" - Claude Pro/Max hisobingiz bilan brauzerda kirasiz;
+      2) Claude kaliti: "sk-ant-..." kalit yoki obuna tokenini qo'yib, "Tekshirish".
+    Claude Code o'rnatilmagan bo'lsa, "O'rnatish" tugmasi chiqadi.
+  - Groq (ixtiyoriy): Gemini ishlamay qolsa, zaxira tez suhbat.
+
+
+YANGILANISH
+-----------
+Mittivoy yangi versiya chiqqanini GitHub'dan o'zi tekshiradi: qahramon aytadi, tray menyusida
+"Yangilash" paydo bo'ladi. Sozlamalar -> "Yangilanish" bo'limida "Yangilanishni tekshirish" ham bor.
+"O'zi yuklab olib o'rnatsin" yoqilgan bo'lsa - kompyuterdan foydalanmayotganingizda o'zi yangilanadi.
 
 
 FE'LI VA HISSIYOTLARI
@@ -58,7 +73,9 @@ U BILAN MUOMALA
 ---------------
   Bir marta bosish ........ gaplashish        Ikki marta bosish ... qitiqlash
   Sudrab otish ............ uchib ketadi       O'ng tugma .......... menyu (o'yinlar, kiyimlar...)
-  Oynalar ustiga chiqib o'tiradi, to'liq ochilgan oynalarning chetiga osilib oladi.
+  Oynalar ustiga chiqib yuradi va o'tiradi, oynadan oynaga sakraydi, chetidan pastga qaraydi,
+  to'liq ochilgan oynalarning chetiga osilib oladi. Ko'tarib biror oyna tepasiga qo'yib
+  yuborsangiz - o'sha oyna ustiga tushadi va xohlasa o'tirib oladi.
 
 
 O'CHIRISH

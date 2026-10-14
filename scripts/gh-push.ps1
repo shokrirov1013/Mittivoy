@@ -23,7 +23,7 @@ $files += Get-Item (Join-Path $Src 'README.md'), (Join-Path $Src 'OQING.txt')
 foreach ($f in $files) {
     if ($f.Name -eq 'gh-push.ps1') { continue }   # tekshiruv namunalarining o'zi shu faylda
     $t = [IO.File]::ReadAllText($f.FullName)
-    if ($t -match 'gho_[0-9A-Za-z]{20}|sk-ant-|AIza[0-9A-Za-z_\-]{30}|gsk_[0-9A-Za-z]{20}|"role":"service_role"|c2VydmljZV9yb2xl') { throw "Maxfiy ma'lumot topildi: $($f.FullName)" }
+    if ($t -match 'gho_[0-9A-Za-z]{20}|sk-ant-[0-9A-Za-z_\-]{20}|AQ\.[0-9A-Za-z_\-]{30}|AIza[0-9A-Za-z_\-]{30}|gsk_[0-9A-Za-z]{20}|"role":"service_role"|c2VydmljZV9yb2xl') { throw "Maxfiy ma'lumot topildi: $($f.FullName)" }
 }
 
 $branch = (Api GET "repos/$Repo" $null).default_branch

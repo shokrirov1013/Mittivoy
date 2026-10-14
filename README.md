@@ -1,6 +1,6 @@
 <p align="center"><img src="docs/icon.png" width="160" alt="Mittivoy"></p>
 
-# Mittivoy 2.6.2 🇺🇿
+# Mittivoy 2.7.0 🇺🇿
 
 **O'zbekcha AI yordamchi — ekraningizda yashaydigan kichkina do'st (Windows uchun)**
 
@@ -11,7 +11,7 @@ o'ynaydi, his-tuyg'ulari va fe'li bor, siz bilan **o'zbek tilida** gaplashadi va
 
 ## ⬇️ Yuklab olish
 
-**[Mittivoy-2.6.2-Windows.zip ni yuklab olish](https://github.com/shokrirov1013/Mittivoy/releases/latest)**
+**[Mittivoy-2.7.0-Windows.zip ni yuklab olish](https://github.com/shokrirov1013/Mittivoy/releases/latest)**
 
 1. ZIP'ni o'ng tugma bilan bosing → **Extract All** (Hammasini chiqarish).
 2. `Mittivoy` papkasidagi **Mittivoy.exe** ni ikki marta bosing → **O'rnatish**.
@@ -30,7 +30,9 @@ o'ynaydi, his-tuyg'ulari va fe'li bor, siz bilan **o'zbek tilida** gaplashadi va
 | ⏰ **Eslatmalar** | "10 daqiqadan keyin choy ichishni eslat" |
 | 🧠 **Xotira** | Siz haqingizdagi muhim narsalarni eslab qoladi |
 | 🤖 **Aqlli rejim** | Oddiy suhbat — Gemini (tez, bepul), murakkab ishlar — Claude (kompyuterni boshqaradi) |
-| 🪟 **Oynalar ustida** | Oynalarga chiqadi, chetida o'tiradi, oyna bilan birga yuradi |
+| 🪟 **Oynalar ustida** | Oynalarga chiqib yuradi, oynadan oynaga sakraydi, chetida o'tiradi, oyna bilan birga yuradi; ko'tarib oyna ustiga tashlasangiz — o'sha yerga qo'nadi |
+| 🔑 **API kalitlar** | Sozlamalarda Gemini, Groq va Claude uchun alohida qator: "Qo'yish" → "Tekshirish" → ishlayapti / ishlamayapti (sababi bilan) |
+| 🔄 **Avtomatik yangilanish** | Yangi versiya GitHub'ga chiqishi bilan ilovaning o'zi yuklab olib o'rnatadi |
 | 🎮 **O'yinlar** | To'p, sovun pufaklari, quvlashmachoq, raqs, umbaloq |
 | 💕 **Fe'l-atvor** | So'ksangiz arazlaydi, kuldirsangiz kuladi, maqtasangiz uyaladi |
 | 👤 **Hisoblar (serverda)** | Email bilan kirish, parolni email orqali tiklash; istalgan kompyuterda o'z qahramoningiz va xotirangiz |
@@ -52,4 +54,4 @@ Rasmiy Electron dvigateli o'zgartirilmagan holda ishlatiladi, shuning uchun Wind
 ## 🔒 Maxfiylik
 
 Hisob, sozlamalar va xotira Supabase serverida saqlanadi; har bir foydalanuvchi faqat o'z yozuvini ko'radi (Row Level Security).
-Gemini/Groq kalitlari serverga faqat parolingizdan olingan kalit bilan shifrlangan holda yuboriladi. Shu kompyuterdagi sessiya Windows DPAPI bilan shifrlanadi.
+Gemini/Groq/Claude kalitlari serverga faqat parolingizdan olingan kalit bilan shifrlangan holda yuboriladi. Shu kompyuterdagi sessiya Windows DPAPI bilan shifrlanadi.
