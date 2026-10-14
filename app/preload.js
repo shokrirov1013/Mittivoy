@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('kapi', {
   cancel: () => ipcRenderer.send('cancel'),
   saveNeeds: n => ipcRenderer.send('save-needs', n),
   openUrl: u => ipcRenderer.send('open-url', u),
+  playSong: q => ipcRenderer.send('play-song', q),
   openApp: n => ipcRenderer.invoke('open-app', n),
   addReminder: (minutes, text) => ipcRenderer.send('add-reminder', { minutes, text }),
   resetChat: () => ipcRenderer.send('reset-chat'),

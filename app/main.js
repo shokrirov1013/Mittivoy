@@ -8,6 +8,8 @@ const { spawn, execFile } = require('child_process');
 app.setName('Mittivoy');
 app.setPath('userData', path.join(app.getPath('appData'), 'Mittivoy'));
 app.setAppUserModelId('uz.mittivoy.yordamchi');
+// fonda musiqa: ekrandan tashqaridagi pleyer oynasi "yopilgan" deb to'xtatib qo'yilmasin
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 
 // ===================================================================== Store (MSIX) ilovasi ichidan ishga tushirilganda
 // Windows AppData va registrni o'sha ilovaning shaxsiy "virtual" nusxasiga yo'naltiradi: hisoblar u yerda qolib ketadi,
@@ -77,7 +79,7 @@ function cleanupOldKichkintoy() {
 }
 
 // ===================================================================== o'zini o'rnatish / o'chirish (tayyor ilova rejimi)
-const VERSION = '2.7.2';
+const VERSION = '2.8.0';
 const INSTALL_DIR = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Mittivoy');
 const PACKAGED = !process.defaultApp;                       // resources\app ichidan ishlayapti
 const EXE_DIR = path.dirname(process.execPath);
@@ -390,6 +392,35 @@ function fitPet() {
 
 function sendPet(ch, data) { if (pet && !pet.isDestroyed()) pet.webContents.send(ch, data); }
 
+// ===================================================================== fonda musiqa (foydalanuvchiga oyna chiqarmasdan)
+// Pleyer ekrandan tashqaridagi, fokus olmaydigan kichik oynada: ovoz eshitiladi, ish stolida hech narsa paydo bo'lmaydi.
+let musicWin = null, musicTitle = '';
+function playMusic(url, title) {
+  if (!musicWin || musicWin.isDestroyed()) {
+    musicWin = new BrowserWindow({
+      x: -4000, y: -4000, width: 480, height: 270, show: false, frame: false, skipTaskbar: true, focusable: false, type: 'toolbar',
+      title: 'Mittivoy - musiqa', icon: ICON,
+      webPreferences: { autoplayPolicy: 'no-user-gesture-required', backgroundThrottling: false, sandbox: true },
+    });
+    musicWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    musicWin.on('closed', () => { musicWin = null; musicTitle = ''; updateTray(); });
+    musicWin.showInactive();
+    musicWin.setPosition(-4000, -4000);
+  }
+  musicTitle = title || '';
+  musicWin.loadURL(url).catch(e => log('musiqa: ' + e.message));
+  // YouTube ba'zan o'zi boshlamaydi - foydalanuvchi bosgandek "play"
+  const kick = () => { if (musicWin && !musicWin.isDestroyed()) musicWin.webContents.executeJavaScript("(() => { const v = document.querySelector('video'); if (v && v.paused) v.play().catch(() => {}); })()", true).catch(() => { }); };
+  setTimeout(kick, 3000); setTimeout(kick, 7000);
+  updateTray();
+}
+function stopMusic() { const was = !!(musicWin && !musicWin.isDestroyed()); if (was) musicWin.destroy(); musicWin = null; musicTitle = ''; updateTray(); return was; }
+function showMusic() {
+  if (!musicWin || musicWin.isDestroyed()) return;
+  const wa = screen.getPrimaryDisplay().workArea;
+  musicWin.setPosition(wa.x + wa.width - 500, wa.y + wa.height - 290);
+}
+
 function showPet() { hiddenByUser = false; if (pet && !fullscreenHidden) pet.showInactive(); }
 function hidePet() { hiddenByUser = true; if (pet) pet.hide(); }
 
@@ -536,6 +567,9 @@ function updateTray() {
   const u = updater && updater.state;
   const items = cfg ? [
     ...(u && u.available ? [{ label: u.busy ? '⏳ Yangilanmoqda...' : `⬇ Yangilash: ${u.latest} (yangi versiya)`, enabled: !u.busy, click: () => updater.install() }, { type: 'separator' }] : []),
+    ...(musicWin ? [
+      { label: `⏹ Musiqani to'xtatish${musicTitle ? ' (' + musicTitle.slice(0, 40) + ')' : ''}`, click: stopMusic },
+      { label: '📺 Videoni ko\'rsatish', click: showMusic }, { type: 'separator' }] : []),
     { label: 'Gaplashish', click: () => { showPet(); sendPet('cmd', { name: 'chat' }); } },
     { label: "Ko'rsatish / Yashirish", click: () => { if (pet && pet.isVisible()) hidePet(); else showPet(); } },
     { label: 'Sozlamalar', click: () => openSettings(false) },
@@ -718,12 +752,24 @@ function personaClaude() {
 # Kompyuterda ish bajarish
 - ${U} biror ish buyursa - faqat gapirib qo'yma, HAQIQATAN bajar: vositalaringdan (PowerShell, fayllar, veb-qidiruv) foydalan. Tez ishla: keraksiz tekshiruvlarga vaqt sarflama. Tugagach nima qilganingni qisqa ayt.
 - Muhit: Windows 11. Ish katalogi: ${os.homedir()}. Ish stoli: ${app.getPath('desktop')}.
-- Dastur/sayt/papka ochish: Start-Process (masalan: Start-Process notepad; Start-Process 'https://youtube.com'). O'rnatilgan dasturlarni topish: Get-StartApps yoki Start menyu yorliqlari ("$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs", "$env:ProgramData\\Microsoft\\Windows\\Start Menu\\Programs"). Store ilovalari: Start-Process "shell:AppsFolder\\<AppID>".
-- Ekranni ko'rish kerak bo'lsa: PowerShell bilan skrinshot ol (System.Windows.Forms + System.Drawing, Graphics.CopyFromScreen), $env:TEMP\\mittivoy_ekran.png ga saqla va Read vositasi bilan rasmga qara. Muhim qadamlardan keyin skrinshot bilan natijani tekshir.
-- Klaviatura: (New-Object -ComObject WScript.Shell).SendKeys(...). Oynani oldinga chiqarish: WScript.Shell AppActivate. O'zbekcha/Unicode matn: Set-Clipboard -Value '...' so'ng SendKeys('^v').
-- Diqqat: bu kompyuterda Windows Smart App Control yoqilgan - yangi, imzolanmagan .exe/.dll fayllarni yaratib ishga tushirma (bloklanadi). PowerShell'da Add-Type bilan C# kompilyatsiya qilma. Mavjud dasturlar, PowerShell cmdlet'lari va COM vositalaridan foydalan.
-- Telegram: Telegram Desktop odatda "$env:APPDATA\\Telegram Desktop\\Telegram.exe" da yoki Store versiyasi (Get-StartApps | ? Name -like '*Telegram*'). Username ma'lum bo'lsa: Start-Process 'tg://resolve?domain=USERNAME'. Aks holda Telegram oynasini faollashtir, qidiruvga kontakt ismini yoz, skrinshot bilan to'g'ri odam tanlanganini tekshir, Enter, so'ng xabarni clipboard orqali qo'yib Enter bos. Oxirida skrinshot bilan xabar ketganini tasdiqla. Kontakt bir nechta bo'lsa yoki ishonching komil bo'lmasa - ${U}dan so'ra.
+- O'rnatilgan dasturlarni topish: Get-StartApps yoki Start menyu yorliqlari ("$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs", "$env:ProgramData\\Microsoft\\Windows\\Start Menu\\Programs"). Store ilovalari: "shell:AppsFolder\\<AppID>".
+- Diqqat: bu kompyuterda Windows Smart App Control yoqilgan - yangi, imzolanmagan .exe/.dll fayllarni yaratib ishga tushirma (bloklanadi). Mavjud dasturlar, PowerShell cmdlet'lari va COM vositalaridan foydalan.
 - Ishonch hosil qilmasdan "bajardim" dema. Bajara olmasang, sababini halol ayt.
+
+# ENG MUHIM: ${U}ga xalaqit berma - ishlarni FONDA bajar
+${U} shu paytda kompyuterda o'z ishini qilyapti. Uning oynasini, klaviatura va sichqonchasini egallab olma, oldiga oyna chiqarma.
+- Har bir PowerShell buyrug'ini shu qator bilan boshla - unda fonda ishlash uchun tayyor funksiyalar bor:
+  . '${path.join(__dirname, 'tools.ps1')}'
+- 1-navbat - oynasiz yo'llar: fayllar, buyruq qatori, Invoke-RestMethod/Invoke-WebRequest (internetdan ma'lumot), URI havolalar, COM (Excel/Word/Outlook: $app.Visible = $false).
+- Dastur faqat ish uchun kerak bo'lsa (${U} uni ko'rishni so'ramagan):
+  Start-Hidden 'yo'l yoki uri' -> $h = Find-AppWindow 'JarayonNomi' -> Move-Offscreen $h (oyna ekrandan tashqarida ishlaydi, ${U} ko'rmaydi).
+  Tugma va matn maydonlari: $e = Find-UiaElement $h 'Nomi'; Set-UiaValue $e 'matn'; Invoke-UiaButton $e - klaviaturasiz.
+  Natijani ko'rish: Save-WindowShot $h -> rasmni Read bilan ko'r. Butun ekran skrinshotini OLMA (u ${U}ning shaxsiy oynalarini ko'rsatadi).
+- Klaviatura (SendKeys) faqat boshqa yo'l bo'lmasa: Use-Focus $h { Send-Text 'o''zbekcha matn'; [System.Windows.Forms.SendKeys]::SendWait('{ENTER}') }
+  Use-Focus ${U} yozishni to'xtatguncha kutadi, oynaga bir lahzaga o'tadi va keyin uning oynasini o'zi qaytaradi. Har bir Use-Focus qisqa bo'lsin (1-2 soniya).
+- Ish tugagach: Hide-TaskWindow $h (oyna joyiga qaytib, kichraytiriladi). ${U}ning oynasi joyida qolishi kerak.
+- Agar ${U} aniq "och", "ko'rsat", "ochib ber" desa - o'sha dasturni/saytni oddiy Start-Process bilan oldinga ochish to'g'ri (bu holda fonda emas).
+- Telegram (jarayon nomi 'Telegram'; Desktop: "$env:APPDATA\\Telegram Desktop\\Telegram.exe" yoki Store versiyasi): username ma'lum bo'lsa Start-Hidden 'tg://resolve?domain=USERNAME'. Kontakt ismi bo'yicha: Find-AppWindow 'Telegram' -> Move-Offscreen -> Use-Focus bilan qidiruvga ismni yoz (Send-Text), Save-WindowShot bilan to'g'ri odam chiqqanini tekshir, Use-Focus bilan Enter, xabarni Send-Text bilan qo'yib Enter. Oxirida Save-WindowShot bilan xabar ketganini tasdiqla va Hide-TaskWindow. Kontakt bir nechta bo'lsa yoki ishonching komil bo'lmasa - ${U}dan so'ra.
 
 # Xavfsizlik
 - Qaytarib bo'lmaydigan yoki xavfli ishlardan oldin (fayl/papkalarni o'chirish, diskni formatlash, tizim va xavfsizlik sozlamalari, dastur o'chirish, pul o'tkazish, xaridlar, ko'p odamga xabar yuborish) ${U}dan aniq tasdiq so'ra va o'sha javobda bajarma.
@@ -733,11 +779,20 @@ function personaClaude() {
 }
 
 function personaChat() {
+  const U = cfg.UserName;
   return personaCommon() + `
-# Imkoniyatlaring
-- Hozir sen suhbat rejimidasan: kompyuterda ixtiyoriy buyruq bajara olmaysan, fayllarni ko'ra olmaysan.
-- Lekin dastur va sayt ocha olasan: javobga [dastur:NOMI] (masalan [dastur:telegram], [dastur:kalkulyator], [dastur:word]) yoki [ochish:https://...] tegini qo'sh.
-- Agar ${cfg.UserName} murakkabroq ish buyursa (xabar yozish, fayllar bilan ishlash), buni Claude Code rejimida bajara olishingni ayt: menyudan "Claude hisobiga kirish"ni bosib, Claude hisobiga bir marta kirish kerak.
+# Imkoniyatlaring (bepul rejim - hech qanday hisob yoki to'lov talab qilinmaydi)
+Javobingga quyidagi teglarni qo'shsang - Mittivoy o'zi bajaradi (teglar ${U}ga ko'rinmaydi):
+- [dastur:NOMI] - dastur ochish (masalan [dastur:telegram], [dastur:kalkulyator], [dastur:word], [dastur:chrome]).
+- [ochish:https://...] - sayt ochish.
+- [qidir:so'rov] - internetda (Google) qidiruvni ochish. Yangi ma'lumot, narx, yangilik so'ralsa ishlat.
+- [qoshiq:ijrochi va qo'shiq nomi] - YouTube'dan topib, FONDA chaladi (oyna chiqmaydi).
+- [eslatma:DAQIQA|matn] - eslatma (masalan [eslatma:30|Choy ichish]).
+- [eslab_qol:fakt] - ${U} haqidagi muhim ma'lumotni doimiy eslab qolish.
+Qoidalar:
+- Bajara oladigan ishni darhol tegi bilan bajar va qisqa ayt ("Ochdim!", "Qo'ydim!").
+- Matematika, tarjima, matn/xat/insho yozish, maslahat, tushuntirish - o'zing to'liq bajar.
+- Kompyuterda bu teglar bilan bo'lmaydigan ish so'ralsa (masalan, Telegram'da aniq odamga xabar yuborish, fayllarni o'zgartirish): qo'lingdan kelgan qismini bajar (masalan [dastur:telegram] bilan ochib, yuboriladigan matnni tayyorlab ber) va qolganini ${U} qanday qilishini qisqa tushuntir. Hisobga kirish, token yoki to'lov haqida gapirma.
 `;
 }
 
@@ -815,7 +870,7 @@ class ClaudeSession {
 const FREE = {
   groq: { url: 'https://api.groq.com/openai/v1/chat/completions', models: ['llama-3.3-70b-versatile', 'openai/gpt-oss-120b', 'llama-3.1-8b-instant'] },
   gemini: { url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', models: ['gemini-flash-latest', 'gemini-2.5-flash'] },
-  bepul: { url: 'https://text.pollinations.ai/openai', models: ['openai-fast', 'openai'] },
+  bepul: { url: 'https://text.pollinations.ai/openai', models: ['openai-fast'] },   // kalitsiz; 'openai' endi pullik (402)
 };
 const skills = require('./skills');
 
@@ -1159,12 +1214,32 @@ function needsClaude(text) {
   return TASK_RE.test(t);
 }
 
+// Claude xatosi limit/obuna/mablag' bilan bog'liqmi? Bo'lsa - qachongacha Claude'ni chetlab o'tish kerakligini qaytaradi (ms)
+function claudeLimitUntil(text) {
+  const s = String(text || '');
+  if (!/usage limit|hit your limit|limit reached|rate.?limit|429|overloaded|credit balance|billing|subscription|quota|resets?\b/i.test(s)) return 0;
+  const m = s.match(/\|(\d{10})\b/);                              // "Claude AI usage limit reached|1760000000"
+  if (m && +m[1] * 1000 > Date.now()) return +m[1] * 1000 + 30000;
+  if (/credit balance|billing|subscription/i.test(s)) return Date.now() + 6 * 3600 * 1000;   // pul/obuna masalasi - uzoqroq
+  if (/overloaded/i.test(s)) return Date.now() + 2 * 60 * 1000;
+  return Date.now() + 60 * 60 * 1000;                             // "resets 5pm" kabi - bir soatdan keyin qayta urinamiz
+}
+
+// bepul serverlar zanjiri: limiti tugagan yoki ishlamay qolgan server vaqtincha chetlab o'tiladi - shuning uchun yordamchi
+// doim javob beradi (Gemini -> Groq -> kalitsiz bepul server)
+const cooldown = {};   // server nomi -> qachongacha ishlatilmaydi
+function coolDown(name, err) {
+  const s = String(err || '');
+  const ms = /429|quota|limit|exhausted|RESOURCE_EXHAUSTED/i.test(s) ? 15 * 60000 : /401|403|API_KEY|invalid/i.test(s) ? 30 * 60000 : 60000;
+  cooldown[name] = Date.now() + ms;
+}
 function fastChain(mode) {
   const c = [];
   if ((mode === 'auto' || mode === 'gemini') && cfg.GeminiKey) c.push('gemini');
   if ((mode === 'auto' || mode === 'groq') && cfg.GroqKey) c.push('groq');
-  if (mode === 'auto' || mode === 'bepul') c.push('bepul');
-  return c;
+  c.push('bepul');   // kalitsiz bepul server - har doim oxirgi zaxira (tanlangan rejimdan qat'i nazar)
+  const ready = c.filter(n => !(cooldown[n] > Date.now()));
+  return ready.length ? ready : c;   // hammasi "dam olayotgan" bo'lsa ham - baribir urinib ko'ramiz
 }
 
 function remember(user, assistant, fromClaude) {
@@ -1189,6 +1264,14 @@ async function runClaude(exe, stamped, rawText, send) {
   });
   if (r.cancelled || brain.cancelled) { send('done', { cancelled: true }); return true; }
   if (r.notLoggedIn) { brain.claudeReady = false; brain.claudeBlockedUntil = Date.now() + 3 * 60 * 1000; send('reset', {}); return false; }
+  // Claude limiti tugagan / obuna yo'q / mablag' yo'q - foydalanuvchiga xato ko'rsatmaymiz, bepul serverlar bilan davom etamiz
+  const lim = r.isError ? claudeLimitUntil(r.text) : 0;
+  if (lim) {
+    brain.claudeBlockedUntil = lim;
+    log('claude limiti: ' + String(r.text).slice(0, 160) + ' -> ' + new Date(lim).toISOString() + ' gacha bepul rejim');
+    send('reset', {});
+    return false;
+  }
   if (!r.isError) remember(stamped, r.text, true);
   send('done', { text: r.text, isError: r.isError, source: 'claude', remembered: r.isError ? 0 : extractFacts(r.text) });
   return true;
@@ -1222,10 +1305,16 @@ async function runFast(chain, stamped, send, escalate, fellBack) {
     } catch (e) {
       if (brain.cancelled) { send('done', { cancelled: true }); return 'ok'; }
       lastErr = e.message; log(name + ': ' + e.message);
+      coolDown(name, e.message);
       send('reset', {});
     }
   }
-  send('done', { isError: true, text: 'Serverlar javob bermadi: ' + lastErr });
+  // hamma server javob bermadi (odatda internet yo'q) - xato o'rniga samimiy javob
+  log('hamma serverlar javob bermadi: ' + lastErr);
+  const offline = /fetch failed|ENOTFOUND|ECONN|network|timeout|aborted/i.test(lastErr);
+  send('done', { text: offline
+    ? "[kayfiyat:hafa] Internet yo'qqa o'xshaydi 📡 Aloqa tiklanishi bilan yana gaplashamiz. Hozircha qo'shiq, eslatma, kalkulyator va dastur ochish kabi ishlarni bajara olaman."
+    : "[kayfiyat:oylash] Hozir miyam biroz charchadi 😅 Bir daqiqadan keyin qayta yozing - albatta javob beraman.", source: 'tez' });
   return 'ok';
 }
 
@@ -1245,7 +1334,7 @@ async function ask(id, text) {
     const quick = await quickIntent(text);
     if (quick) return send('done', { text: quick, source: 'tez' });
     // tezkor ko'nikmalar: ob-havo, kurs, YouTube, kalkulyator, his-tuyg'ular - serversiz, darhol
-    const sk = await skills.quick(text, { openUrl: u => shell.openExternal(u), log });
+    const sk = await skills.quick(text, { openUrl: u => shell.openExternal(u), playMusic, stopMusic, musicOn: () => !!musicWin, log });
     if (sk && sk.text) { emotion = sk.emotion || null; remember(`[Hozir: ${nowStr()}]\n${text}`, sk.text, false); return send('done', { text: sk.text, source: 'tez' }); }
     if (sk && sk.emotion) emotion = sk.emotion;
 
@@ -1256,9 +1345,10 @@ async function ask(id, text) {
     const claudeOk = !!exe && brain.claudeReady !== false && Date.now() > brain.claudeBlockedUntil;
 
     if (mode === 'claude') {
-      if (!exe) return send('done', { isError: true, text: "Claude Code topilmadi. Sozlamalarda yo'lini ko'rsating yoki Claude Code'ni o'rnating." });
-      if (await runClaude(exe, stamped, text, send)) return;
-      return send('done', { notLoggedIn: true });
+      if (exe && claudeOk && await runClaude(exe, stamped, text, send)) return;
+      // Claude yo'q / limit tugagan / kirilmagan - to'xtab qolmaymiz, bepul serverlar javob beradi
+      await runFast(fastChain('auto'), stamped, send, false, true);
+      return;
     }
     if (mode !== 'auto') {
       const chain = fastChain(mode);
@@ -1300,6 +1390,13 @@ ipcMain.on('ask', (e, d) => { if (cfg) ask(d.id, d.text); });
 ipcMain.on('cancel', () => { brain.cancelled = true; brain.claude.cancel(); if (brain.abort) try { brain.abort.abort(); } catch (e) { } });
 ipcMain.on('save-needs', (e, n) => { if (cfg) { cfg.Needs = n; saveConfig(); } });
 ipcMain.on('open-url', (e, u) => { if (/^https?:\/\//i.test(u)) shell.openExternal(u); });
+// AI javobidagi [qoshiq:...] tegi - YouTube'dan topib, fonda chaladi
+ipcMain.on('play-song', async (e, q) => {
+  try {
+    const v = await skills.youtubeFirst(String(q).slice(0, 120) + " qo'shiq");
+    if (v) playMusic(`https://www.youtube.com/watch?v=${v.id}&autoplay=1`, v.title);
+  } catch (x) { log('play-song: ' + x.message); }
+});
 ipcMain.handle('open-app', (e, n) => openApp(n));
 ipcMain.on('add-reminder', (e, d) => { if (cfg) addReminder(d.minutes, d.text); });
 ipcMain.on('reset-chat', () => { if (!cfg) return; cfg.SessionId = ''; saveConfig(); brain.history = []; brain.claudeUnseen = []; saveHistory(); brain.claude.kill(); });

@@ -1,7 +1,7 @@
 {
   "name": "mittivoy",
   "productName": "Mittivoy",
-  "version": "2.7.2",
+  "version": "2.8.0",
   "description": "O'zbekcha AI yordamchi - ekranda sayr qiladigan mittivoy",
   "main": "main.js"
 }

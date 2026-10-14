@@ -1,6 +1,6 @@
 <p align="center"><img src="docs/icon.png" width="160" alt="Mittivoy"></p>
 
-# Mittivoy 2.7.2 🇺🇿
+# Mittivoy 2.8.0 🇺🇿
 
 **O'zbekcha AI yordamchi — ekraningizda yashaydigan kichkina do'st (Windows uchun)**
 
@@ -11,7 +11,7 @@ o'ynaydi, his-tuyg'ulari va fe'li bor, siz bilan **o'zbek tilida** gaplashadi va
 
 ## ⬇️ Yuklab olish
 
-**[Mittivoy-2.7.2-Windows.zip ni yuklab olish](https://github.com/shokrirov1013/Mittivoy/releases/latest)**
+**[Mittivoy-2.8.0-Windows.zip ni yuklab olish](https://github.com/shokrirov1013/Mittivoy/releases/latest)**
 
 1. ZIP'ni o'ng tugma bilan bosing → **Extract All** (Hammasini chiqarish).
 2. `Mittivoy` papkasidagi **Mittivoy.exe** ni ikki marta bosing → **O'rnatish**.
@@ -31,6 +31,8 @@ o'ynaydi, his-tuyg'ulari va fe'li bor, siz bilan **o'zbek tilida** gaplashadi va
 | 🧠 **Xotira** | Siz haqingizdagi muhim narsalarni eslab qoladi |
 | 🤖 **Aqlli rejim** | Oddiy suhbat — Gemini (tez, bepul), murakkab ishlar — Claude (kompyuterni boshqaradi) |
 | 🪟 **Oynalar ustida** | Oynalarga chiqib yuradi, oynadan oynaga sakraydi, chetida o'tiradi, oyna bilan birga yuradi; ko'tarib oyna ustiga tashlasangiz — o'sha yerga qo'nadi |
+| 🆓 **Hamma uchun bepul** | Hisob, kalit yoki to'lovsiz ishlaydi; limiti tugagan server o'zi chetlab o'tiladi (Gemini → Groq → kalitsiz bepul server), Claude esa faqat ixtiyoriy qo'shimcha |
+| 🤫 **Fonda ishlaydi** | Buyurgan ishlaringiz oynangizni egallamasdan bajariladi; qo'shiq ko'rinmas pleyerda chalinadi |
 | 🔑 **API kalitlar** | Sozlamalarda Gemini, Groq va Claude uchun alohida qator: "Qo'yish" → "Tekshirish" → ishlayapti / ishlamayapti (sababi bilan) |
 | 🔄 **Avtomatik yangilanish** | Yangi versiya GitHub'ga chiqishi bilan ilovaning o'zi yuklab olib o'rnatadi |
 | 🎮 **O'yinlar** | To'p, sovun pufaklari, quvlashmachoq, raqs, umbaloq |

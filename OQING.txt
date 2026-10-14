@@ -1,4 +1,4 @@
-MITTIVOY 2.7.2 - o'zbekcha AI yordamchi (Windows uchun)
+MITTIVOY 2.8.0 - o'zbekcha AI yordamchi (Windows uchun)
 =====================================================
 
 Ekraningizda yashaydigan kichkina qizaloq yoki bolakay: sayr qiladi, oynalar ustiga chiqib
@@ -29,7 +29,11 @@ HISOB (SERVERDA)
 
 BEPUL VA DARHOL BAJARADIGAN ISHLARI (internet bo'lsa yetarli, hisob shart emas)
 ------------------------------------------------------------------------------
-  "Yulduz Usmonovaning qo'shig'ini qo'y" ... YouTube'dan topib, o'zi qo'yadi
+Mittivoy hamma uchun bepul ishlaydi: hech qanday kalit yoki to'lov shart emas. Bir server limiti
+tugasa, o'zi keyingisiga o'tadi (Gemini -> Groq -> kalitsiz bepul server). Buyurgan ishlaringiz
+FONDA bajariladi - oynangiz, klaviatura va sichqonchangiz band qilinmaydi.
+  "Yulduz Usmonovaning qo'shig'ini qo'y" ... topib, FONDA chaladi ("musiqani to'xtat" - to'xtatadi)
+  "Shahzodaning klipini qo'y" ............... videoni ko'rish uchun ochadi
   "Toshkent ob-havosi qanday?" .............. hozirgi ob-havo
   "Dollar kursi" / "100 dollar necha so'm" .. Markaziy bank kursi
   "125*48 nechchi?" ......................... kalkulyator

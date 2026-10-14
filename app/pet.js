@@ -697,7 +697,7 @@
 
   function clean(raw, partial) {
     let t = String(raw || '');
-    t = t.replace(/\[\s*(kayfiyat|harakat|ochish|dastur|eslatma|eslab_?qol)\s*:[^\]]*\]/gi, '').replace(/\[claude\]/gi, '');
+    t = t.replace(/\[\s*(kayfiyat|harakat|ochish|dastur|eslatma|eslab_?qol|qoshiq|qo'shiq|qidir)\s*:[^\]]*\]/gi, '').replace(/\[claude\]/gi, '');
     t = t.replace(/\[Hozir:[^\]]*\]/gi, '');
     if (partial) t = t.replace(/\[[^\]]*$/, '');
     t = t.replace(/\*\*|__|`/g, '').replace(/^\s*#+\s*/gm, '');
@@ -750,16 +750,15 @@
     if (S.mode === 'think') setMode('idle', 1);
     if (d.source) $('bsrc').textContent = SRC[d.source] || d.source;
     if (d.cancelled) return reply("[kayfiyat:oddiy] Mayli, to'xtatdim. Yana nima qilay?");
-    if (d.notLoggedIn) {
-      reply("[kayfiyat:hafa] Men hali Claude hisobingizga ulanmaganman. Hozir oyna ochaman - o'sha yerda hisobingizga kiring. Keyin menga qayta yozing!");
-      return api.login();
-    }
+    // Claude ixtiyoriy: ulanmagan bo'lsa ham oyna ochib, hisob so'rab bezovta qilmaymiz
+    if (d.notLoggedIn) return reply("[kayfiyat:oddiy] Bu ishni hozir bajara olmadim 🙏 Boshqacha so'rab ko'ring - qo'limdan kelganini bepul qilib beraman.");
     if (d.isError) return reply('[kayfiyat:hafa] Voy, nimadir xato ketdi 😟\n' + String(d.text || '').slice(0, 300));
     let text = d.text || cur.raw;
     if (d.remembered) setTimeout(() => spawnFx('🧠', S.x, S.y - 150, 2), 400);
     if (d.fellBack && !S.fallbackNoted) {
+      // bir marta, yumshoq eslatma (Claude - majburiy emas, qo'shimcha imkoniyat)
       S.fallbackNoted = true;
-      text += '\n\n(ℹ Bu ishni to\'liq bajarishim uchun Claude kerak, lekin hali Claude hisobingizga ulanmaganman. Sozlamalar → "🔑 Hisobga kirish" tugmasini bosing.)';
+      text += '\n\n(ℹ Men bepul rejimda ishlayapman. Kompyuterda murakkabroq ishlarni ham bajarishim uchun xohlasangiz, Sozlamalarda Claude\'ni ulashingiz mumkin - bu majburiy emas.)';
     }
     reply(text);
     feel(d.emotion);
@@ -807,6 +806,8 @@
     for (const m of raw.matchAll(/\[\s*ochish\s*:\s*(https?:\/\/[^\]\s]+)\s*\]/gi)) api.openUrl(m[1]);
     for (const m of raw.matchAll(/\[\s*dastur\s*:\s*([^\]]+)\]/gi)) api.openApp(m[1].trim());
     for (const m of raw.matchAll(/\[\s*eslatma\s*:\s*(\d+(?:[.,]\d+)?)\s*\|([^\]]*)\]/gi)) api.addReminder(parseFloat(m[1].replace(',', '.')), m[2].trim());
+    for (const m of raw.matchAll(/\[\s*qo'?shiq\s*:\s*([^\]]+)\]/gi)) api.playSong(m[1].trim());
+    for (const m of raw.matchAll(/\[\s*qidir\s*:\s*([^\]]+)\]/gi)) api.openUrl('https://www.google.com/search?q=' + encodeURIComponent(m[1].trim()));
     const text = clean(raw) || '👍';
     if (!S.chat) { S.chat = true; showBubble(text, true); } else showBubble(text, true);
     S.chatClose = now() + 120000 + Math.min(text.length * 400, 120000);

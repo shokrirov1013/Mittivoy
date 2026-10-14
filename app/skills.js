@@ -129,10 +129,22 @@ async function play(text, ctx) {
   if (!PLAY_VERB.test(t) || !(MEDIA_WORD.test(t) || /\b(youtube|yutub)\b/.test(t))) return null;
   let q = t.replace(PLAY_VERB, '').replace(MEDIA_WORD, ' ').replace(/\b(youtubeda|youtubedan|yutubda|youtube|menga|iltimos|bitta|birorta|ni|ini|dan|da)\b/g, ' ').replace(/\s+/g, ' ').trim();
   if (!q) q = "o'zbek qo'shiqlari 2026";
-  const v = await youtubeFirst(q + (MEDIA_WORD.test(t) && !/video/.test(t) ? ' qo\'shiq' : ''));
+  const wantsVideo = /\b(video\w*|klip\w*)\b|korsat/.test(t);
+  const v = await youtubeFirst(q + (MEDIA_WORD.test(t) && !wantsVideo ? ' qo\'shiq' : ''));
   if (!v) { ctx.openUrl('https://www.youtube.com/results?search_query=' + encodeURIComponent(q)); return `[kayfiyat:oylash] "${q}" ni YouTube'da qidirib ochdim 🔎`; }
-  ctx.openUrl(`https://www.youtube.com/watch?v=${v.id}&autoplay=1`);
-  return `[kayfiyat:xursand] [harakat:raqs] 🎵 Qo'ydim: ${v.title}\nYoqimli tinglang! 💃`;
+  const url = `https://www.youtube.com/watch?v=${v.id}&autoplay=1`;
+  // video/klip - ko'rish uchun brauzerda; qo'shiq - fonda (oyna chiqmaydi, ishingizga xalaqit bermaydi)
+  if (wantsVideo || !ctx.playMusic) { ctx.openUrl(url); return `[kayfiyat:xursand] [harakat:raqs] 🎬 Ochdim: ${v.title}\nYoqimli tomosha! 🍿`; }
+  ctx.playMusic(url, v.title);
+  return `[kayfiyat:xursand] [harakat:raqs] 🎵 Qo'ydim: ${v.title}\nFonda chalinyapti - ishingizni davom ettiravering. To'xtatish uchun "musiqani to'xtat" deng 💃`;
+}
+// fonda chalinayotgan musiqani to'xtatish
+function stopPlay(t, ctx) {
+  if (!ctx.stopMusic || !ctx.musicOn || !ctx.musicOn()) return null;
+  if (!/(toxtat|ochir|bas qil|yetarli|jim|ovozini ochir)/.test(t)) return null;
+  if (!/(musiqa|qoshiq|ashula|qoshig|trek|ovoz)/.test(t) && t.split(' ').length > 2) return null;
+  ctx.stopMusic();
+  return "[kayfiyat:oddiy] ⏹ Musiqani to'xtatdim.";
 }
 
 // ------------------------------------------------------------------ asosiy kirish nuqtasi
@@ -154,6 +166,7 @@ async function quick(text, ctx) {
   if (/\d\s*[-+*/x×÷^%:]\s*[\d(]/.test(ex)) { const v = calc(ex); if (v !== null) return { text: `[kayfiyat:xursand] ${ex.replace(/\s+/g, ' ')} = ${v} 🧮` }; }
 
   if (/(latifa|hazil|kuldir|qiziq gap)/.test(t) && t.split(' ').length <= 6) return { text: '[kayfiyat:kulgi] ' + pick(JOKES), emotion: 'laugh' };
+  const stopped = stopPlay(t, ctx); if (stopped) return { text: stopped };
 
   try {
     if (/(ob-?havo|obhavo|havo (qanday|qalay|necha)|harorat|yomgir yogadimi|qor yogadimi|issiqmi|sovuqmi)/.test(t)) return { text: await weather(t) };
