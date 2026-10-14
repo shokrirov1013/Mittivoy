@@ -79,7 +79,7 @@ function cleanupOldKichkintoy() {
 }
 
 // ===================================================================== o'zini o'rnatish / o'chirish (tayyor ilova rejimi)
-const VERSION = '2.9.0';
+const VERSION = '2.9.5';
 const INSTALL_DIR = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Mittivoy');
 const PACKAGED = !process.defaultApp;                       // resources\app ichidan ishlayapti
 const EXE_DIR = path.dirname(process.execPath);
@@ -955,17 +955,24 @@ async function streamChat(name, key, messages, onChunk, signal) {
   }
   const P = FREE[name];
   let lastErr = '';
+  // birinchi so'z shu vaqtda kelmasa - kutib o'tirmaymiz, keyingi (tezroq) serverga o'tamiz
+  const firstWordMs = { groq: 5000, gemini: 6000, freellm: 25000, bepul: 12000 }[name] || 8000;
   for (const model of P.models) {
-    let got = '';
+    let got = '', ftTimer = null, ftHit = false;
+    const ft = new AbortController();
     try {
+      ftTimer = setTimeout(() => { ftHit = true; ft.abort(); }, firstWordMs);
+      const sigs = [AbortSignal.timeout(30000), ft.signal];   // 30 s - umumiy chegara
+      if (signal) sigs.push(signal);
       const res = await fetch(P.url, {
-        method: 'POST', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(45000)]) : AbortSignal.timeout(45000),
+        method: 'POST', signal: AbortSignal.any(sigs),
         headers: Object.assign({ 'Content-Type': 'application/json' }, key ? { Authorization: 'Bearer ' + key.trim() } : {}),
-        body: JSON.stringify({ model, messages, stream: true, temperature: 0.8 }),
+        body: JSON.stringify({ model, messages, stream: true, temperature: 0.8, max_tokens: 500 }),   // qisqa javob - tezroq tugaydi
       });
       if (!res.ok) { lastErr = res.status + ' ' + (await res.text()).slice(0, 200); continue; }
       const ct = res.headers.get('content-type') || '';
       if (!ct.includes('event-stream')) {
+        clearTimeout(ftTimer);   // oqimsiz javob to'liq kelguncha - faqat umumiy chegara amal qiladi
         const j = await res.json();
         got = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
         if (got) { onChunk(got); return got; }
@@ -986,7 +993,7 @@ async function streamChat(name, key, messages, onChunk, signal) {
           try {
             const j = JSON.parse(data);
             const t = j.choices && j.choices[0] && j.choices[0].delta && j.choices[0].delta.content;
-            if (t) { got += t; onChunk(t); }
+            if (t) { clearTimeout(ftTimer); got += t; onChunk(t); }
           } catch (e) { }
         }
       }
@@ -995,8 +1002,9 @@ async function streamChat(name, key, messages, onChunk, signal) {
     } catch (e) {
       if (signal && signal.aborted) throw e;
       if (got.trim()) return got;
+      if (ftHit) throw new Error(`birinchi javob kech keldi (${name}, ${firstWordMs / 1000} s)`);   // boshqa modellarni sinab o'tirmay, keyingi serverga
       lastErr = e.message;
-    }
+    } finally { clearTimeout(ftTimer); }
   }
   throw new Error(lastErr || 'javob yo\'q');
 }
@@ -1232,15 +1240,21 @@ function claudeLimitUntil(text) {
 const cooldown = {};   // server nomi -> qachongacha ishlatilmaydi
 function coolDown(name, err) {
   const s = String(err || '');
-  const ms = /429|quota|limit|exhausted|RESOURCE_EXHAUSTED/i.test(s) ? 15 * 60000 : /401|403|API_KEY|invalid/i.test(s) ? 30 * 60000 : 60000;
+  // limit (429) odatda daqiqalik bo'ladi - uzoq kutmaymiz, tez-tez qayta urinamiz (yordamchi doim javob berishi uchun)
+  const ms = /429|quota|limit|exhausted|RESOURCE_EXHAUSTED/i.test(s) ? 2 * 60000 : /401|403|API_KEY|invalid/i.test(s) ? 30 * 60000 : 20000;
   cooldown[name] = Date.now() + ms;
 }
-function fastChain(mode) {
+function fullChain(mode) {
   const c = [];
-  if ((mode === 'auto' || mode === 'gemini') && cfg.GeminiKey) c.push('gemini');
+  // tezlik tartibi: Groq (eng tez) -> Gemini -> FreeLLMAPI (ko'p provayderli zaxira) -> kalitsiz bepul server
   if ((mode === 'auto' || mode === 'groq') && cfg.GroqKey) c.push('groq');
+  if ((mode === 'auto' || mode === 'gemini') && cfg.GeminiKey) c.push('gemini');
   if ((mode === 'auto' || mode === 'freellm') && cfg.FreeLlmKey) c.push('freellm');
   c.push('bepul');   // kalitsiz bepul server - har doim oxirgi zaxira (tanlangan rejimdan qat'i nazar)
+  return c;
+}
+function fastChain(mode) {
+  const c = fullChain(mode);
   const ready = c.filter(n => !(cooldown[n] > Date.now()));
   return ready.length ? ready : c;   // hammasi "dam olayotgan" bo'lsa ham - baribir urinib ko'ramiz
 }
@@ -1284,9 +1298,19 @@ async function runClaude(exe, stamped, rawText, send) {
 async function runFast(chain, stamped, send, escalate, fellBack) {
   let sys = personaChat();
   if (escalate) sys += `\n# Ish taqsimoti (MUHIM)\n- Sen tezkor suhbatdoshsan. Agar so'rov kompyuterda biror ish bajarishni, internetdan yangi ma'lumot olishni, hisob-kitob, matematika, algoritm, kod, uzun matn yozish yoki chuqur tahlilni talab qilsa - hech narsa yozmasdan FAQAT [claude] deb javob ber. Oddiy suhbat, hol-ahvol, hazil, maslahat va qisqa savollarga o'zing javob ber.\n`;
-  const messages = [{ role: 'system', content: sys }].concat(brain.history, [{ role: 'user', content: stamped }]);
+  const messages = [{ role: 'system', content: sys }].concat(brain.history.slice(-12), [{ role: 'user', content: stamped }]);   // qisqa tarix - tezroq javob
   let lastErr = '';
-  for (const name of chain) {
+  // 2 o'tish: birinchi - "dam olmayotgan" serverlar; ikkinchi - hammasi (cheklovdan qat'i nazar), yordamchi doim javob berishi uchun
+  const passes = [chain];
+  const all = fullChain('auto');
+  passes.push(all);
+  for (let pass = 0; pass < passes.length; pass++) {
+   if (pass > 0) {
+     if (/fetch failed|ENOTFOUND|ECONN|network/i.test(lastErr) && !/localhost|freellm/i.test(lastErr)) break;   // internet yo'q - qayta urinishning foydasi yo'q
+     await new Promise(r => setTimeout(r, 1500));
+     if (brain.cancelled) { send('done', { cancelled: true }); return 'ok'; }
+   }
+   for (const name of passes[pass]) {
     brain.abort = new AbortController();
     send('source', { source: name });
     try {
@@ -1311,6 +1335,7 @@ async function runFast(chain, stamped, send, escalate, fellBack) {
       coolDown(name, e.message);
       send('reset', {});
     }
+   }
   }
   // hamma server javob bermadi (odatda internet yo'q) - xato o'rniga samimiy javob
   log('hamma serverlar javob bermadi: ' + lastErr);
