@@ -47,44 +47,68 @@
     $('meEmail').textContent = me.email;
     $('sEmail').value = me.email;
   }
+  // xabar ko'rsatish; xato bo'lsa qizil, muvaffaqiyat bo'lsa yashil; kerak bo'lsa "qayta yuborish" havolasi
+  function say(id, text, ok, resendEmail) {
+    const e = $(id);
+    e.textContent = text || '';
+    e.classList.toggle('ok', !!ok);
+    if (resendEmail) {
+      const a = document.createElement('button');
+      a.className = 'btn link'; a.textContent = ' Tasdiqlash xatini qayta yuborish';
+      a.addEventListener('click', async () => { const r = await api.authResend(resendEmail); say(id, r.ok ? r.msg : r.err, r.ok); });
+      e.appendChild(a);
+    }
+  }
   async function rememberGo() {
-    busy($('rGo'), true);
+    busy($('rGo'), true); say('rErr', 'Kirilmoqda...', true);
     const r = await api.authLogin(me.id, $('rPin').value);
     busy($('rGo'), false);
-    if (!r.ok) { $('rErr').textContent = r.err === 'google' ? 'Bu hisob Google orqali ochilgan.' : r.err; $('rPin').select(); }
+    if (!r.ok) { say('rErr', r.err, false, r.unconfirmed ? me.email : null); $('rPin').select(); }
   }
   $('rGo').addEventListener('click', rememberGo);
   $('rPin').addEventListener('keydown', e => { if (e.key === 'Enter') rememberGo(); });
   $('rOther').addEventListener('click', () => show('vSignin'));
 
   async function signin() {
-    busy($('sGo'), true);
+    busy($('sGo'), true); say('sErr', 'Kirilmoqda...', true);
     const r = await api.authSignin($('sEmail').value, $('sPin').value);
     busy($('sGo'), false);
-    if (!r.ok) $('sErr').textContent = r.err === 'google' ? 'Bu hisob Google orqali ochilgan - "Google bilan kirish"ni bosing.' : r.err;
+    if (!r.ok) say('sErr', r.err, false, r.unconfirmed ? $('sEmail').value : null);
   }
   $('sGo').addEventListener('click', signin);
   for (const id of ['sEmail', 'sPin']) $(id).addEventListener('keydown', e => { if (e.key === 'Enter') signin(); });
 
   async function signup() {
-    if ($('uPin').value !== $('uPin2').value) { $('uErr').textContent = 'Parollar bir xil emas'; return; }
-    busy($('uGo'), true);
+    if ($('uPin').value !== $('uPin2').value) { say('uErr', 'Parollar bir xil emas'); return; }
+    busy($('uGo'), true); say('uErr', "Ro'yxatdan o'tkazilmoqda...", true);
     const r = await api.authCreate({ name: $('uName').value, email: $('uEmail').value, pin: $('uPin').value });
     busy($('uGo'), false);
-    if (!r.ok) $('uErr').textContent = r.err;
+    if (r.ok) return;
+    if (r.needConfirm) {
+      // tasdiqlash xati yuborildi - "Kirish" oynasiga o'tib, email va parolni oldindan to'ldiramiz
+      const email = $('uEmail').value, pin = $('uPin').value;
+      show('vSignin');
+      $('sEmail').value = email; $('sPin').value = pin;
+      say('sErr', r.msg, true, email);
+      return;
+    }
+    say('uErr', r.err);
   }
   $('uGo').addEventListener('click', signup);
   for (const id of ['uName', 'uEmail', 'uPin', 'uPin2']) $(id).addEventListener('keydown', e => { if (e.key === 'Enter') signup(); });
 
   $('toUp').addEventListener('click', () => show('vSignup'));
   $('toIn').addEventListener('click', () => show('vSignin'));
-  const forgot = errId => () => {
-    const e = $(errId);
-    e.classList.remove('ok');
-    e.textContent = "Parolni email orqali tiklash bulutli hisob (server) ulangandan keyin ishlaydi. Hozircha hisobingiz shu kompyuterda saqlanadi.";
+  // parolni unutdim: emailga tiklash havolasi yuboriladi
+  const forgot = (errId, emailOf) => async () => {
+    const email = emailOf();
+    if (!email) { say(errId, 'Avval emailingizni yozing, so\'ng "Parolni unutdingizmi?"ni bosing'); return; }
+    say(errId, 'Yuborilmoqda...', true);
+    const r = await api.authRecover(email);
+    say(errId, r.ok ? r.msg : r.err, r.ok);
   };
-  $('rForgot').addEventListener('click', forgot('rErr'));
-  $('sForgot').addEventListener('click', forgot('sErr'));
+  $('rForgot').addEventListener('click', forgot('rErr', () => me && me.email));
+  $('sForgot').addEventListener('click', forgot('sErr', () => $('sEmail').value.trim()));
 
   show(me ? 'vRemember' : 'vSignup');
 })();

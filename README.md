@@ -1,4 +1,4 @@
-# Mittivoy 2.5.1 🇺🇿
+# Mittivoy 2.6 🇺🇿
 
 **O'zbekcha AI yordamchi — ekraningizda yashaydigan kichkina do'st (Windows uchun)**
 
@@ -9,7 +9,7 @@ o'ynaydi, his-tuyg'ulari va fe'li bor, siz bilan **o'zbek tilida** gaplashadi va
 
 ## ⬇️ Yuklab olish
 
-**[Mittivoy-2.5.1-Windows.zip ni yuklab olish](https://github.com/shokrirov1013/Mittivoy/releases/latest)**
+**[Mittivoy-2.6-Windows.zip ni yuklab olish](https://github.com/shokrirov1013/Mittivoy/releases/latest)**
 
 1. ZIP'ni o'ng tugma bilan bosing → **Extract All** (Hammasini chiqarish).
 2. `Mittivoy` papkasidagi **Mittivoy.exe** ni ikki marta bosing → **O'rnatish**.
@@ -31,7 +31,7 @@ o'ynaydi, his-tuyg'ulari va fe'li bor, siz bilan **o'zbek tilida** gaplashadi va
 | 🪟 **Oynalar ustida** | Oynalarga chiqadi, chetida o'tiradi, oyna bilan birga yuradi |
 | 🎮 **O'yinlar** | To'p, sovun pufaklari, quvlashmachoq, raqs, umbaloq |
 | 💕 **Fe'l-atvor** | So'ksangiz arazlaydi, kuldirsangiz kuladi, maqtasangiz uyaladi |
-| 👤 **Hisoblar** | Har kim o'z hisobi bilan; bir kompyuterda bir marta kirasiz |
+| 👤 **Hisoblar (serverda)** | Email bilan kirish, parolni email orqali tiklash; istalgan kompyuterda o'z qahramoningiz va xotirangiz |
 
 Yuqoridagi tezkor ishlarning barchasi **bepul** va AI serversiz darhol bajariladi.
 
@@ -49,5 +49,5 @@ Rasmiy Electron dvigateli o'zgartirilmagan holda ishlatiladi, shuning uchun Wind
 
 ## 🔒 Maxfiylik
 
-Hisoblar, sozlamalar va xotira faqat sizning kompyuteringizda saqlanadi (`%APPDATA%\Mittivoy`).
-API kalitlar (Gemini, Groq) hech qayerga yuborilmaydi va manba kodida yo'q.
+Hisob, sozlamalar va xotira Supabase serverida saqlanadi; har bir foydalanuvchi faqat o'z yozuvini ko'radi (Row Level Security).
+Gemini/Groq kalitlari serverga faqat parolingizdan olingan kalit bilan shifrlangan holda yuboriladi. Shu kompyuterdagi sessiya Windows DPAPI bilan shifrlanadi.

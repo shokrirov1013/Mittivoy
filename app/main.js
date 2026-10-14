@@ -1,5 +1,5 @@
 // Mittivoy - asosiy jarayon: oynalar, AI "miyasi", tray, avtomatik ishga tushish, oynalarni kuzatish.
-const { app, BrowserWindow, ipcMain, screen, Tray, Menu, shell, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Tray, Menu, shell, powerMonitor, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -77,7 +77,7 @@ function cleanupOldKichkintoy() {
 }
 
 // ===================================================================== o'zini o'rnatish / o'chirish (tayyor ilova rejimi)
-const VERSION = '2.5.1';
+const VERSION = '2.6';
 const INSTALL_DIR = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Mittivoy');
 const PACKAGED = !process.defaultApp;                       // resources\app ichidan ishlayapti
 const EXE_DIR = path.dirname(process.execPath);
@@ -149,14 +149,29 @@ function killInstalledCopies() {
       { windowsHide: true, timeout: 20000 });
   } catch (e) { }
 }
+function sleepMs(ms) { try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); } catch (e) { } }
+// band (hali yopilmagan yoki antivirus tekshirayotgan) faylni o'chirish: bir necha urinish, bo'lmasa chetga surib qo'yish
+function freeFile(f) {
+  for (let i = 0; i < 12; i++) {
+    try { if (fs.existsSync(f)) fs.rmSync(f, { force: true }); return; } catch (e) { }
+    try { fs.renameSync(f, f + '.old-' + Date.now()); return; } catch (e) { }
+    sleepMs(500);
+  }
+}
 function selfInstall() {
   killInstalledCopies();
+  sleepMs(1200);
+  freeFile(path.join(INSTALL_DIR, 'Mittivoy.exe'));
+  for (const dll of ['ffmpeg.dll', 'libEGL.dll', 'libGLESv2.dll', 'd3dcompiler_47.dll']) freeFile(path.join(INSTALL_DIR, dll));
   // eski versiya fayllari (runtime\, app\, skriptlar) - tozalanadi; foydalanuvchi ma'lumotlari %APPDATA% da qoladi
-  for (const old of ['runtime', 'app', 'Mittivoy.ps1', 'ORNATISH.ps1', 'OCHIRISH.ps1', 'manba', 'resources']) {
+  for (const old of ['runtime', 'app', 'Mittivoy.ps1', 'ORNATISH.ps1', 'OCHIRISH.ps1', 'manba', 'resources', 'locales', 'vk_swiftshader.dll', 'vk_swiftshader_icd.json', 'vulkan-1.dll']) {
     try { fs.rmSync(path.join(INSTALL_DIR, old), { recursive: true, force: true }); } catch (e) { }
   }
   fs.mkdirSync(INSTALL_DIR, { recursive: true });
-  fs.cpSync(EXE_DIR, INSTALL_DIR, { recursive: true, force: true });
+  for (let i = 0; ; i++) {
+    try { fs.cpSync(EXE_DIR, INSTALL_DIR, { recursive: true, force: true }); break; }
+    catch (e) { if (i >= 5) throw e; sleepMs(1000); }
+  }
   makeShortcuts(INSTALL_DIR);
   setAutostart(INSTALL_DIR, true, true);
   // Explorer orqali ochamiz - shunda o'rnatuvchi qayerdan ishga tushirilgan bo'lmasin, Mittivoy haqiqiy muhitda ishlaydi
@@ -177,6 +192,7 @@ function selfUninstall() {
   try { cp.execFileSync('reg.exe', ['delete', UNINSTALL_KEY, '/f'], { windowsHide: true }); } catch (e) { }
   // qayta o'rnatilganda hisob qayta so'ralsin
   try { const aj = path.join(app.getPath('userData'), 'app.json'); const s = JSON.parse(fs.readFileSync(aj, 'utf8')); s.lastProfile = null; fs.writeFileSync(aj, JSON.stringify(s, null, 2)); } catch (e) { }
+  try { fs.rmSync(path.join(app.getPath('userData'), 'session.bin'), { force: true }); } catch (e) { }
   const extra = r === 1 ? ` & rmdir /s /q "${path.join(app.getPath('appData'), 'Mittivoy')}"` : '';
   spawn('cmd.exe', ['/c', `ping 127.0.0.1 -n 3 > nul & rmdir /s /q "${INSTALL_DIR}"${extra}`], { detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true }).unref();
 }
@@ -252,8 +268,48 @@ function loadProfile(p) {
   memory = readJson(path.join(PDIR, 'memory.json'), { facts: [] });
   if (!Array.isArray(memory.facts)) memory.facts = [];
 }
-function saveConfig() { if (cfg && PDIR) writeJson(path.join(PDIR, 'config.json'), cfg); }
-function saveMemory() { if (PDIR) writeJson(path.join(PDIR, 'memory.json'), memory); }
+function saveConfig() { if (cfg && PDIR) { writeJson(path.join(PDIR, 'config.json'), cfg); syncSoon(); } }
+function saveMemory() { if (PDIR) { writeJson(path.join(PDIR, 'memory.json'), memory); syncSoon(); } }
+
+// ===================================================================== bulutli hisob (Supabase)
+const { Cloud } = require('./cloud');
+let cloud = null;   // app tayyor bo'lganda yaratiladi (safeStorage kerak)
+const SYNC_KEYS = ['UserName', 'PetName', 'Gender', 'Outfit', 'Skin', 'Hair', 'Provider', 'Model', 'FullAccess', 'Chatty', 'Autostart', 'Needs', 'Reminders'];
+function collectData() {
+  const c = {}; for (const k of SYNC_KEYS) if (cfg && k in cfg) c[k] = cfg[k];
+  return { config: c, memory: { facts: memory.facts || [] }, secret: { GeminiKey: cfg ? cfg.GeminiKey || '' : '', GroqKey: cfg ? cfg.GroqKey || '' : '' } };
+}
+function applyData(d) {
+  if (!d || !cfg) return;
+  if (d.config) for (const k of SYNC_KEYS) if (k in d.config) cfg[k] = d.config[k];
+  if (d.memory && Array.isArray(d.memory.facts)) memory.facts = d.memory.facts;
+  if (d.secret) { if (d.secret.GeminiKey) cfg.GeminiKey = d.secret.GeminiKey; if (d.secret.GroqKey) cfg.GroqKey = d.secret.GroqKey; }
+  if (d.updated) cfg.SyncedAt = d.updated;
+  writeJson(path.join(PDIR, 'config.json'), cfg);
+  writeJson(path.join(PDIR, 'memory.json'), memory);
+}
+function syncSoon() { if (cloud && cloud.s && profile && profile.cloud) cloud.schedulePush(collectData, 4000); }
+// kirishda: bulutdagi nusxa yangiroq bo'lsa - uni olamiz, aks holda bizdagini yuboramiz
+async function syncOnLogin() {
+  if (!cloud || !cloud.s || !profile || !profile.cloud) return;
+  try {
+    const d = await cloud.pull();
+    if (d && (d.updated || 0) >= (cfg.SyncedAt || 0)) {
+      const petBefore = cfg.PetName;
+      applyData(d);
+      sendPet('config', publicConfig());
+      if (!petBefore && cfg.PetName && !pet && !settingsWin) start();
+    } else {
+      cfg.SyncedAt = await cloud.push(collectData());
+      writeJson(path.join(PDIR, 'config.json'), cfg);
+    }
+    log('sinxronlandi');
+  } catch (e) {
+    log('sync: ' + (e.raw || e.message));
+    // sessiya bekor qilingan (masalan, parol boshqa joyda o'zgartirilgan) - qayta kirish so'raladi
+    if (!e.offline && /refresh token|invalid.*token|jwt/i.test(String(e.raw || ''))) setTimeout(logout, 500);
+  }
+}
 function saveHistory() { if (PDIR) writeJson(path.join(PDIR, 'history.json'), { history: brain.history, unseen: brain.claudeUnseen }); }
 function publicConfig() { const c = Object.assign({}, cfg); delete c.GeminiKey; delete c.GroqKey; return c; }
 
@@ -313,7 +369,12 @@ function createPet() {
   pet.once('ready-to-show', () => pet.showInactive());
   pet.on('closed', () => { pet = null; });
 }
-setInterval(() => { if (pet && pet.isVisible()) pet.setAlwaysOnTop(true, 'screen-saver'); }, 10000);
+// Mittivoy doim eng oldinda: boshqa "doim ustda" oynalar (bildirishnomalar va h.k.) chiqsa ham, qaytadan eng ustga chiqadi
+setInterval(() => {
+  if (!pet || pet.isDestroyed() || !pet.isVisible()) return;
+  pet.setAlwaysOnTop(true, 'screen-saver', 1);
+  pet.moveTop();
+}, 1500);
 
 function fitPet() {
   if (!pet) return;
@@ -360,9 +421,28 @@ function openSignin() {
   signinWin.on('closed', () => { signinWin = null; if (!profile && !quitting) app.quit(); });
 }
 
-function login(p) {
+// bulutli hisobga kirildi: mahalliy keshdagi profilni topamiz yoki yaratamiz
+function cloudProfile(user) {
+  let p = appState.profiles.find(x => x.id === user.id);
+  if (!p) {
+    p = { id: user.id, name: user.name, email: user.email, cloud: true, created: Date.now() };
+    const dst = path.join(DATA, 'profiles', p.id);
+    // shu kompyuterdagi eski mahalliy profil (hisob, qahramon, xotira) yangi bulutli hisobga o'tkaziladi
+    const legacy = appState.profiles.filter(x => !x.cloud).pop();
+    if (legacy && !fs.existsSync(path.join(dst, 'config.json'))) {
+      try { fs.cpSync(path.join(DATA, 'profiles', legacy.id), dst, { recursive: true }); log('eski profil bulutli hisobga o\'tkazildi'); } catch (e) { }
+    }
+    appState.profiles = appState.profiles.filter(x => x.cloud);
+    appState.profiles.push(p);
+  } else { p.name = user.name || p.name; p.email = user.email || p.email; }
+  saveAppState();
+  return p;
+}
+
+async function login(p) {
   loadProfile(p);
   appState.lastProfile = p.id; appState.rememberId = p.id; saveAppState();
+  if (p.cloud) await syncOnLogin();
   const h = readJson(path.join(PDIR, 'history.json'), {});
   brain.history = Array.isArray(h.history) ? h.history : [];
   brain.claudeUnseen = Array.isArray(h.unseen) ? h.unseen : [];
@@ -380,6 +460,7 @@ function login(p) {
 
 function logout() {
   if (cfg) { saveConfig(); saveHistory(); }
+  if (cloud) cloud.signOut();
   brain.claude.kill();
   remTimers.forEach(clearTimeout); remTimers = [];
   profile = null; cfg = null; PDIR = null; memory = { facts: [] }; brain.history = []; brain.claudeUnseen = [];
@@ -640,7 +721,7 @@ class ClaudeSession {
       '--append-system-prompt-file', persona];
     if (cfg.SessionId) args.push('--resume', cfg.SessionId);
     if (cfg.FullAccess) args.push('--dangerously-skip-permissions'); else args.push('--permission-mode', 'acceptEdits');
-    if (cfg.Model) args.push('--model', cfg.Model);
+    args.push('--model', cfg.Model || 'sonnet');   // tezroq javob uchun standart - Sonnet
     const isCmd = /\.cmd$/i.test(exe);
     const proc = spawn(isCmd ? `"${exe}"` : exe, args, { cwd: os.homedir(), windowsHide: true, shell: isCmd });
     this.proc = proc; this.buf = ''; this.stderr = '';
@@ -1103,42 +1184,47 @@ ipcMain.on('reset-chat', () => { if (!cfg) return; cfg.SessionId = ''; saveConfi
 ipcMain.on('logout', () => logout());
 
 // kirish oynasi
-ipcMain.handle('auth-state', () => ({ remembered: rememberedProfile(), google: !!googleConfig() }));
-function checkPin(p, pin) {
-  if (p.google && !p.pinHash) return { ok: false, err: 'google' };
-  if (p.pinHash && hashPin(pin || '', p.salt) !== p.pinHash) return { ok: false, err: "Parol noto'g'ri" };
-  return { ok: true };
+ipcMain.handle('auth-state', () => {
+  const r = rememberedProfile();
+  return { remembered: r && r.email ? r : null, google: !!googleConfig(), cloud: true };
+});
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+async function cloudSignIn(email, pin) {
+  email = String(email || '').trim().toLowerCase();
+  if (!EMAIL_RE.test(email)) return { ok: false, err: "Email noto'g'ri yozilgan" };
+  if (!pin) return { ok: false, err: 'Parolingizni yozing' };
+  try {
+    const user = await cloud.signIn(email, pin);
+    setTimeout(() => login(cloudProfile(user)), 50);
+    return { ok: true };
+  } catch (e) { return { ok: false, err: e.message, unconfirmed: /tasdiqlanmagan/.test(e.message) }; }
 }
-// shu kompyuterda eslab qolingan hisob bilan davom etish
+// shu kompyuterda eslab qolingan hisob bilan davom etish (faqat parol so'raladi)
 ipcMain.handle('auth-login', (e, d) => {
   const p = appState.profiles.find(x => x.id === d.id);
-  if (!p) return { ok: false, err: 'Hisob topilmadi' };
-  const r = checkPin(p, d.pin);
-  if (r.ok) setTimeout(() => login(p), 50);
-  return r;
+  return cloudSignIn(p ? p.email : '', d.pin);
 });
-// email va parol bilan kirish
-ipcMain.handle('auth-signin', (e, d) => {
-  const email = String(d.email || '').trim().toLowerCase();
-  if (!email) return { ok: false, err: 'Emailingizni yozing' };
-  const p = appState.profiles.find(x => (x.email || '').toLowerCase() === email);
-  if (!p) return { ok: false, err: "Bu email bilan hisob topilmadi. \"Ro'yxatdan o'tish\"ni bosing." };
-  const r = checkPin(p, d.pin);
-  if (r.ok) setTimeout(() => login(p), 50);
-  return r;
-});
-ipcMain.handle('auth-create', (e, d) => {
+ipcMain.handle('auth-signin', (e, d) => cloudSignIn(d.email, d.pin));
+ipcMain.handle('auth-create', async (e, d) => {
   const name = String(d.name || '').trim(), email = String(d.email || '').trim().toLowerCase();
   if (!name) return { ok: false, err: 'Ismingizni yozing' };
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, err: "Email noto'g'ri yozilgan" };
-  if (String(d.pin || '').length < 4) return { ok: false, err: "Parol kamida 4 ta belgidan iborat bo'lsin" };
-  if (appState.profiles.some(p => (p.email || '').toLowerCase() === email)) return { ok: false, err: "Bu email bilan hisob allaqachon bor - \"Kirish\" orqali kiring" };
-  const p = { id: crypto.randomBytes(4).toString('hex'), name, email, created: Date.now() };
-  p.salt = crypto.randomBytes(8).toString('hex'); p.pinHash = hashPin(d.pin, p.salt);
-  appState.profiles.push(p); saveAppState();
-  writeJson(path.join(DATA, 'profiles', p.id, 'config.json'), { UserName: name });
-  setTimeout(() => login(p), 50);
-  return { ok: true };
+  if (!EMAIL_RE.test(email)) return { ok: false, err: "Email noto'g'ri yozilgan" };
+  if (String(d.pin || '').length < 6) return { ok: false, err: "Parol kamida 6 ta belgidan iborat bo'lsin" };
+  try {
+    const r = await cloud.signUp(name, email, d.pin);
+    if (r.confirmed) { setTimeout(() => login(cloudProfile(r.user)), 50); return { ok: true }; }
+    return { ok: false, needConfirm: true, msg: `${email} manziliga tasdiqlash xati yubordik ✉️. Xatdagi havolani bosing, so'ng shu yerda "Kirish"ni bosing. ("Spam" papkasini ham tekshiring.)` };
+  } catch (err) { return { ok: false, err: err.message }; }
+});
+ipcMain.handle('auth-resend', async (e, email) => {
+  try { await cloud.resend(String(email || '').trim().toLowerCase()); return { ok: true, msg: 'Tasdiqlash xati qayta yuborildi ✉️' }; }
+  catch (err) { return { ok: false, err: err.message }; }
+});
+ipcMain.handle('auth-recover', async (e, email) => {
+  email = String(email || '').trim().toLowerCase();
+  if (!EMAIL_RE.test(email)) return { ok: false, err: 'Avval emailingizni yozing' };
+  try { await cloud.recover(email); return { ok: true, msg: `${email} manziliga parolni tiklash havolasi yuborildi ✉️. Havolani bosib, yangi parol qo'ying, so'ng shu yerda kiring.` }; }
+  catch (err) { return { ok: false, err: err.message }; }
 });
 ipcMain.handle('auth-google', async () => {
   try {
@@ -1327,10 +1413,17 @@ if (!skipRest) app.whenReady().then(() => {
   screen.on('display-metrics-changed', fitPet);
   screen.on('display-added', fitPet);
   screen.on('display-removed', fitPet);
-  // shu kompyuterda bir marta kirilgan bo'lsa - "profildan chiqish" bosilmaguncha qayta so'ramaydi
-  const last = appState.profiles.find(p => p.id === appState.lastProfile);
-  if (last) { login(last); if (process.argv.includes('--sozlamalar')) setTimeout(() => openSettings(false), 800); }
-  else openSignin();
-  if (PACKAGED && INSTALLED) setTimeout(cleanupOldKichkintoy, 5000);
+  // bulutli sessiya shu kompyuterda saqlangan bo'lsa - "profildan chiqish" bosilmaguncha qayta so'ramaydi (internet bo'lmasa ham)
+  cloud = new Cloud(DATA, safeStorage, log);
+  const ses = cloud.load();
+  if (ses && ses.user && ses.user.id) {
+    login(cloudProfile(ses.user));
+    if (process.argv.includes('--sozlamalar')) setTimeout(() => openSettings(false), 1200);
+  } else openSignin();
+  if (PACKAGED && INSTALLED) {
+    setTimeout(cleanupOldKichkintoy, 5000);
+    // yangilanishda chetga surilgan eski fayllarni tozalash
+    setTimeout(() => { try { for (const f of fs.readdirSync(INSTALL_DIR)) if (/\.old-\d+$/.test(f)) fs.rmSync(path.join(INSTALL_DIR, f), { force: true }); } catch (e) { } }, 8000);
+  }
   log('ishga tushdi v' + VERSION);
 });

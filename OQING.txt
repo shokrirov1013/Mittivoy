@@ -1,4 +1,4 @@
-MITTIVOY 2.5 - o'zbekcha AI yordamchi (Windows uchun)
+MITTIVOY 2.6 - o'zbekcha AI yordamchi (Windows uchun)
 =====================================================
 
 Ekraningizda yashaydigan kichkina qizaloq yoki bolakay: sayr qiladi, oynalar ustiga chiqib
@@ -13,8 +13,18 @@ O'RNATISH
    - Windows ogohlantirsa: "More info" (Batafsil) -> "Run anyway" (Baribir ishga tushirish).
 3. "O'rnatish" ni bosing. Ish stoli va Start menyusida "Mittivoy" yorlig'i paydo bo'ladi,
    Windows yoqilganda o'zi fonda ishga tushadi. Yuklab olingan papkani endi o'chirsangiz bo'ladi.
-4. Ro'yxatdan o'ting (ism, email, parol). Shu kompyuterda qayta so'ralmaydi -
-   faqat "Profildan chiqish" bosilsa yoki dastur o'chirib qayta o'rnatilsa so'raydi.
+4. Ro'yxatdan o'ting (ism, email, parol). Emailingizga tasdiqlash xati keladi - undagi
+   havolani bosing, so'ng ilovada "Kirish"ni bosing.
+
+
+HISOB (SERVERDA)
+----------------
+  - Hisobingiz serverda saqlanadi: boshqa kompyuterga o'rnatib, o'sha email va parol bilan
+    kirsangiz - qahramoningiz, sozlamalaringiz va xotirasi o'sha yerda ham paydo bo'ladi.
+  - Shu kompyuterda bir marta kirsangiz, qayta so'ralmaydi ("Profildan chiqish" bosilmaguncha).
+  - Parolni unutsangiz: kirish oynasida "Parolni unutdingizmi?" -> emailga havola keladi.
+  - Har bir foydalanuvchining ma'lumotlari faqat o'ziga ko'rinadi. Gemini/Groq kalitlari
+    parolingiz bilan shifrlanib saqlanadi.
 
 
 BEPUL VA DARHOL BAJARADIGAN ISHLARI (internet bo'lsa yetarli, hisob shart emas)
@@ -48,6 +58,7 @@ U BILAN MUOMALA
 ---------------
   Bir marta bosish ........ gaplashish        Ikki marta bosish ... qitiqlash
   Sudrab otish ............ uchib ketadi       O'ng tugma .......... menyu (o'yinlar, kiyimlar...)
+  Oynalar ustiga chiqib o'tiradi, to'liq ochilgan oynalarning chetiga osilib oladi.
 
 
 O'CHIRISH

@@ -57,13 +57,16 @@
     const np = [floor];
     wins.forEach((w, i) => {
       const top = w.y;
-      if (top < 175 || top > H - 90) return;
+      if (top > H - 90 || w.y + w.h < 200) return;
+      // yuqori chet ekranning tepasiga juda yaqin (yoki oyna to'liq ochilgan) - ustida o'tirib bo'lmaydi, chetiga osilib oladi
+      const hang = top < 150;
+      const edge = Math.max(top, 0);
       let segs = [[Math.max(w.x + 10, 10), Math.min(w.x + w.w - 10, W - 10)]];
       for (let j = 0; j < i; j++) {
         const o = wins[j];
-        if (o.y <= top + 2 && o.y + o.h > top - 2) segs = subtract(segs, o.x - 4, o.x + o.w + 4);
+        if (o.y <= edge + 2 && o.y + o.h > edge - 2) segs = subtract(segs, o.x - 4, o.x + o.w + 4);
       }
-      for (const s of segs) if (s[1] - s[0] >= 80) np.push({ id: w.id, y: top, x1: s[0] + 16, x2: s[1] - 16, win: w });
+      for (const s of segs) if (s[1] - s[0] >= 80) np.push({ id: w.id, y: hang ? Math.max(edge + 84, 150) : top, x1: s[0] + 16, x2: s[1] - 16, win: w, hang });
     });
     updateRiding(np);
     plats = np;
@@ -164,9 +167,9 @@
       setMode('land', 0.4); needs.fun += 4;
       think(pick(['Yana! Yana! 😆', 'Uchdim-a! ✈️', 'Uff! 😅', 'Juda zo\'r edi! 🤩']), 2.5);
     } else if (S.climbDone) {
-      S.climbDone = false; setMode('land', 0.3);
-      think(pick(['Yuqoriga chiqdim! 🎉', "Bu yerdan hamma narsa ko'rinadi! 😄", 'Men eng balanddaman! 🏔️']), 3);
-      needs.fun += 3;
+      S.climbDone = false; needs.fun += 3;
+      if (p.hang) { setMode('hang', R(5, 10)); think(pick(['Osilib turibman! 🐒', 'Voy, baland ekan! 😆', 'Qo\'limni qo\'yib yubormayman! 💪']), 3); }
+      else { setMode('land', 0.3); think(pick(['Yuqoriga chiqdim! 🎉', "Bu yerdan hamma narsa ko'rinadi! 😄", 'Men eng balanddaman! 🏔️']), 3); }
     } else setMode('land', 0.25);
     S.thrown = false;
   }
@@ -181,7 +184,7 @@
     if (S.y < FEET + 10 && S.vy < 0) { S.y = FEET + 10; S.vy = Math.abs(S.vy) * 0.3; }
     if (S.vy > 0) {
       let best = null;
-      for (const p of plats) if (py <= p.y + 1 && S.y >= p.y && S.x >= p.x1 - 20 && S.x <= p.x2 + 20 && (!best || p.y < best.y)) best = p;
+      for (const p of plats) if (!p.hang && py <= p.y + 1 && S.y >= p.y && S.x >= p.x1 - 20 && S.x <= p.x2 + 20 && (!best || p.y < best.y)) best = p;
       if (best) land(best);
       else if (S.y > H + 400) { S.y = H; S.x = clamp(S.x, floor.x1, floor.x2); land(floor); }
     }
@@ -198,7 +201,7 @@
     S.y -= CLIMB * (needs.energy < 25 ? 0.7 : 1) * dt;
     if (S.y <= c.target.y) {
       const w = c.target.win;
-      S.x = clamp(c.side < 0 ? w.x + 34 : w.x + w.w - 34, c.target.x1, c.target.x2);
+      S.x = clamp(c.side < 0 ? Math.max(w.x, 0) + 34 : Math.min(w.x + w.w, W) - 34, c.target.x1, c.target.x2);
       S.y = c.target.y; S.vy = 0; S.climbDone = true; S.climb = null;
       land(c.target);
     }
@@ -216,20 +219,21 @@
       const w = t.win;
       const dy = cur.y - t.y;
       const nx = clamp(S.x, t.x1 + 10, t.x2 - 10), dx = Math.abs(nx - S.x);
-      if (dy < 240 && dx < 280 && rnd() < 0.65) {
+      if (!t.hang && dy < 240 && dx < 280 && rnd() < 0.65) {
         think(pick(['Hop! 🐸', 'Sakrayman! 🤸', 'Bir, ikki, uch! 🚀']), 1.5);
         S.face = Math.sign(nx - S.x) || S.face;
         setMode('crouch', 0.35); S.afterCrouch = () => jumpTo(nx, t.y);
         return true;
       }
-      const sides = [[-1, w.x - 4], [1, w.x + w.w + 4]].filter(([s, x]) => {
+      // oynaning yon tomoni; to'liq ochilgan oynada yon tomon ekran chetida - ekran cheti bo'ylab tirmashadi
+      const sides = [[-1, w.x - 4], [1, w.x + w.w + 4]].map(([s, x]) => [s, clamp(x, cur.x1, cur.x2), x]).filter(([s, x, raw]) => {
         const lx = s < 0 ? w.x + 34 : w.x + w.w - 34;
-        return x >= cur.x1 && x <= cur.x2 && lx >= t.x1 - 2 && lx <= t.x2 + 2;
+        return Math.abs(x - raw) < 90 && lx >= t.x1 - 60 && lx <= t.x2 + 60;
       });
       if (!sides.length) return false;
       sides.sort((a, b) => Math.abs(a[1] - S.x) - Math.abs(b[1] - S.x));
       const [s, x] = sides[0];
-      think(pick(['Anavi oyna ustiga chiqaman! 🧗', 'Yuqorida nima bor ekan? 👀', 'Tog\'ga chiqamiz! ⛰️']), 2.5);
+      think(t.hang ? pick(['Anavi oynaga osilib olaman! 🐒', 'Eng tepaga chiqaman! 🧗']) : pick(['Anavi oyna ustiga chiqaman! 🧗', 'Yuqorida nima bor ekan? 👀', 'Tog\'ga chiqamiz! ⛰️']), 2.5);
       walkTo(x, Math.abs(x - S.x) > 300, () => startClimb(t, s, x));
       return true;
     }
@@ -361,6 +365,16 @@
 
   // ------------------------------------------------------------------ xulq-atvor rejalashtiruvchisi
   function pickNext() {
+    // oyna chetiga osilib turibdi: chet bo'ylab qo'llari bilan yuradi, osilib turadi yoki pastga sakraydi
+    if (S.plat && S.plat.hang && !S.air) {
+      if (S.busy || S.chat) return setMode('hang', R(3, 6));
+      const r = rnd(), p = S.plat;
+      if (r < 0.35) { S.target = clamp(S.x + R(-220, 220), p.x1, p.x2); return setMode('hangmove', 25); }
+      if (r < 0.62) return setMode('hang', R(4, 9));
+      think(pick(['Sakrayman! 🪂', "Qo'limni qo'yib yubordim! 😆", 'Uuuu! 🎢']), 1.5);
+      S.vx = S.face * R(30, 110); S.vy = 0; S.air = true; S.plat = null;
+      return setMode('fall', 99);
+    }
     if (S.busy) return setMode('think', 9999);
     if (offended() && !S.chat) {
       // arazlagan: qo'llarini qovushtirib o'tiradi, gohida oyog'ini tepib qo'yadi
@@ -467,9 +481,16 @@
         case 'sleep':
           if (needs.energy >= 98 || (idleSec < 5 && needs.energy > 60 && S.modeT > 30)) wake(pick(['Yaxshi uxladim! ☀️', 'Uyg\'ondim! 😊']));
           break;
+        case 'hangmove': {
+          // oyna cheti bo'ylab qo'llari bilan sekin yuradi
+          const d = S.target - S.x;
+          if (Math.abs(d) < 3 || S.modeT > S.dur) setMode('hang', R(3, 7));
+          else { S.face = Math.sign(d); S.x += Math.sign(d) * Math.min(Math.abs(d), 48 * dt); S.moving = true; }
+          break;
+        }
       }
       if (S.plat && !S.dragging && (S.x < S.plat.x1 - 22 || S.x > S.plat.x2 + 22)) startFall();
-      if (S.modeT > S.dur && ['idle', 'look', 'listen', 'sit', 'dance', 'wave', 'yawn', 'stretch', 'trip', 'land', 'dizzy', 'laugh', 'cry', 'stomp', 'shy', 'sulk', 'rofl'].includes(S.mode)) pickNext();
+      if (S.modeT > S.dur && ['idle', 'look', 'listen', 'sit', 'dance', 'wave', 'yawn', 'stretch', 'trip', 'land', 'dizzy', 'laugh', 'cry', 'stomp', 'shy', 'sulk', 'rofl', 'hang'].includes(S.mode)) pickNext();
     }
     ballStep(dt);
     soapStep(dt);
@@ -513,6 +534,13 @@
       case 'bubbles': armR = 115; front = true; head = 4; by = -Math.abs(Math.sin(t * 3)) * 2; break;
     }
     if (S.air && S.spin) rot = S.rot;
+    // oyna chetiga osilgan: qo'llar tepada (chetni ushlab), oyoqlar osilib tebranadi
+    if (S.plat && S.plat.hang && !S.air && !S.dragging) {
+      const k = S.moving ? Math.sin(t * 7) : 0;
+      armL = 172 - k * 14; armR = -172 - k * 14; front = false;
+      legL = Math.sin(t * 2.2) * 16 + 6; legR = Math.sin(t * 2.2 + 0.6) * 16 - 6;
+      head = Math.sin(t * 1.4) * 4; bx = Math.sin(t * 1.1) * 2; by = 0; sit = 0; sq = 1; rot = Math.sin(t * 1.1) * 3; shadow = 0;
+    }
     P.pose({ legL, legR, armL, armR, head, bx, by, sq, rot, sit, armsFront: front, shadow });
 
     petEl.style.transform = `translate3d(${(S.x - HALF).toFixed(1)}px, ${(S.y - FEET).toFixed(1)}px, 0) scaleX(${S.face < 0 ? -1 : 1})`;

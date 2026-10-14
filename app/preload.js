@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld('kapi', {
   authState: () => ipcRenderer.invoke('auth-state'),
   authLogin: (id, pin) => ipcRenderer.invoke('auth-login', { id, pin }),
   authSignin: (email, pin) => ipcRenderer.invoke('auth-signin', { email, pin }),
+  authResend: email => ipcRenderer.invoke('auth-resend', email),
+  authRecover: email => ipcRenderer.invoke('auth-recover', email),
   ride: id => ipcRenderer.send('ride', id),
   authCreate: d => ipcRenderer.invoke('auth-create', d),
   authGoogle: () => ipcRenderer.invoke('auth-google'),

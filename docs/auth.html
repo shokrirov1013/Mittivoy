@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mittivoy - Hisob</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px;
+      font-family: 'Segoe UI', system-ui, sans-serif; color: #1E2A33;
+      background: linear-gradient(160deg, #23A9B9 0%, #136F80 100%); }
+    .card { width: 100%; max-width: 420px; background: #fff; border-radius: 22px; padding: 30px 28px 26px; box-shadow: 0 20px 50px rgba(0,0,0,.25); position: relative; overflow: hidden; }
+    .card::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 7px;
+      background: repeating-linear-gradient(90deg, #F2C14E 0 12px, #C2185B 12px 18px, #F2C14E 18px 24px, #1A9AAD 24px 30px); }
+    h1 { margin: 6px 0 4px; font-size: 26px; color: #0E6472; }
+    .sub { color: #5F7A80; font-size: 14.5px; line-height: 1.5; }
+    .big { font-size: 46px; text-align: center; margin: 4px 0 2px; }
+    label { display: block; font-size: 13.5px; margin: 14px 0 5px; color: #35525A; }
+    input { width: 100%; padding: 12px 14px; border: 1.5px solid #B8E3E9; border-radius: 12px; font: inherit; font-size: 15px; outline: none; }
+    input:focus { border-color: #1A9AAD; box-shadow: 0 0 0 3px rgba(43,179,192,.2); }
+    button { width: 100%; margin-top: 18px; padding: 12px; border: none; border-radius: 12px; font: inherit; font-size: 15px; font-weight: 700;
+      color: #fff; background: linear-gradient(#2EC4D6, #158FA3); cursor: pointer; }
+    button:disabled { opacity: .6; }
+    .msg { margin-top: 14px; font-size: 14px; min-height: 18px; }
+    .err { color: #C62828; } .ok { color: #2E7D32; }
+    .hidden { display: none; }
+    .foot { margin-top: 18px; font-size: 12.5px; color: #7A9399; text-align: center; }
+    a { color: #158FA3; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div id="vLoading"><div class="big">⏳</div><p class="sub" style="text-align:center">Tekshirilmoqda...</p></div>
+
+    <div id="vConfirmed" class="hidden">
+      <div class="big">✅</div>
+      <h1>Email tasdiqlandi!</h1>
+      <p class="sub">Rahmat! Endi Mittivoy ilovasiga qaytib, emailingiz va parolingiz bilan <b>"Kirish"</b> tugmasini bosing.</p>
+    </div>
+
+    <div id="vReset" class="hidden">
+      <div class="big">🔑</div>
+      <h1>Yangi parol</h1>
+      <p class="sub">Mittivoy hisobingiz uchun yangi parol o'ylab toping.</p>
+      <label>Yangi parol (kamida 6 belgi)</label><input id="p1" type="password" autocomplete="new-password">
+      <label>Parolni takrorlang</label><input id="p2" type="password" autocomplete="new-password">
+      <button id="save">Parolni saqlash</button>
+      <div class="msg" id="msg"></div>
+    </div>
+
+    <div id="vDone" class="hidden">
+      <div class="big">🎉</div>
+      <h1>Parol yangilandi!</h1>
+      <p class="sub">Endi Mittivoy ilovasida yangi parolingiz bilan kiring.<br><small>Eslatma: xavfsizlik uchun Gemini/Groq kalitlarini Sozlamalarda qaytadan ulashingiz kerak bo'lishi mumkin.</small></p>
+    </div>
+
+    <div id="vError" class="hidden">
+      <div class="big">⚠️</div>
+      <h1>Havola ishlamadi</h1>
+      <p class="sub" id="errText">Havola eskirgan yoki allaqachon ishlatilgan.</p>
+      <p class="sub">Mittivoy ilovasida <b>"Parolni unutdingizmi?"</b> tugmasini qayta bosing - yangi havola yuboriladi.</p>
+    </div>
+
+    <div class="foot">Mittivoy - o'zbekcha AI yordamchi · <a href="https://github.com/shokrirov1013/Mittivoy">GitHub</a></div>
+  </div>
+
+  <script>
+    const SUPABASE = 'https://gnppvkvsirybdkzurxdg.supabase.co';
+    const ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImducHB2a3ZzaXJ5YmRrenVyeGRnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE5NTAyMTcsImV4cCI6MjEwNzUyNjIxN30.IvkLGRyMxn0gXTf7fKt68B5McIbgCn_68T4uDEqMdZs';
+    const $ = id => document.getElementById(id);
+    const show = id => { for (const v of ['vLoading', 'vConfirmed', 'vReset', 'vDone', 'vError']) $(v).classList.toggle('hidden', v !== id); };
+
+    const hash = new URLSearchParams(location.hash.slice(1));
+    const query = new URLSearchParams(location.search);
+    const token = hash.get('access_token');
+    const type = hash.get('type') || query.get('type');
+    const err = hash.get('error_description') || query.get('error_description');
+    // havoladagi maxfiy tokenni manzil satridan olib tashlaymiz
+    if (location.hash) history.replaceState(null, '', location.pathname);
+
+    if (err) { $('errText').textContent = decodeURIComponent(err.replace(/\+/g, ' ')); show('vError'); }
+    else if (token && type === 'recovery') { show('vReset'); setTimeout(() => $('p1').focus(), 50); }
+    else if (token) show('vConfirmed');
+    else show('vError');
+
+    $('save').addEventListener('click', async () => {
+      const p1 = $('p1').value, p2 = $('p2').value, m = $('msg');
+      m.className = 'msg err';
+      if (p1.length < 6) { m.textContent = "Parol kamida 6 ta belgidan iborat bo'lsin"; return; }
+      if (p1 !== p2) { m.textContent = 'Parollar bir xil emas'; return; }
+      $('save').disabled = true; m.className = 'msg ok'; m.textContent = 'Saqlanmoqda...';
+      try {
+        const r = await fetch(SUPABASE + '/auth/v1/user', {
+          method: 'PUT', headers: { apikey: ANON, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: p1 }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.msg || j.error_description || j.message || ('HTTP ' + r.status));
+        show('vDone');
+      } catch (e) {
+        $('save').disabled = false; m.className = 'msg err';
+        m.textContent = /same|different from the old/i.test(e.message) ? "Yangi parol eskisidan farq qilishi kerak" : /weak|at least/i.test(e.message) ? "Parol juda oddiy - uzunroq parol tanlang" : 'Xato: ' + e.message;
+      }
+    });
+  </script>
+</body>
+</html>
