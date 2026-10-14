@@ -79,7 +79,7 @@ function cleanupOldKichkintoy() {
 }
 
 // ===================================================================== o'zini o'rnatish / o'chirish (tayyor ilova rejimi)
-const VERSION = '2.8.1';
+const VERSION = '2.9.0';
 const INSTALL_DIR = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Mittivoy');
 const PACKAGED = !process.defaultApp;                       // resources\app ichidan ishlayapti
 const EXE_DIR = path.dirname(process.execPath);
@@ -243,7 +243,7 @@ const DATA = app.getPath('userData');
 const ICON = path.join(__dirname, 'assets', 'icon.ico');
 const DEFAULTS = {
   UserName: '', PetName: '', Gender: 'girl', Outfit: 'zamonaviy', Skin: 'orta', Hair: 'qora',
-  ClaudePath: '', SessionId: '', Model: '', Provider: 'auto', GeminiKey: '', GroqKey: '', ClaudeKey: '', AutoUpdate: true,
+  ClaudePath: '', SessionId: '', Model: '', Provider: 'auto', GeminiKey: '', GroqKey: '', FreeLlmKey: '', ClaudeKey: '', AutoUpdate: true,
   FullAccess: true, Chatty: true, Autostart: true, Needs: { energy: 80, fun: 70, love: 70 }, AppVersion: 2, Reminders: [],
 };
 
@@ -871,6 +871,8 @@ const FREE = {
   groq: { url: 'https://api.groq.com/openai/v1/chat/completions', models: ['llama-3.3-70b-versatile', 'openai/gpt-oss-120b', 'llama-3.1-8b-instant'] },
   gemini: { url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', models: ['gemini-flash-latest', 'gemini-2.5-flash'] },
   bepul: { url: 'https://text.pollinations.ai/openai', models: ['openai-fast'] },   // kalitsiz; 'openai' endi pullik (402)
+  // FreeLLMAPI: shu kompyuterdagi bepul LLM router (Start menyudagi "FreeLLMAPI" ochiq bo'lsa ishlaydi); kalit - uning "Birlashtirilgan API kaliti"
+  freellm: { url: 'http://localhost:3001/v1/chat/completions', models: ['auto'] },
 };
 const skills = require('./skills');
 
@@ -1237,6 +1239,7 @@ function fastChain(mode) {
   const c = [];
   if ((mode === 'auto' || mode === 'gemini') && cfg.GeminiKey) c.push('gemini');
   if ((mode === 'auto' || mode === 'groq') && cfg.GroqKey) c.push('groq');
+  if ((mode === 'auto' || mode === 'freellm') && cfg.FreeLlmKey) c.push('freellm');
   c.push('bepul');   // kalitsiz bepul server - har doim oxirgi zaxira (tanlangan rejimdan qat'i nazar)
   const ready = c.filter(n => !(cooldown[n] > Date.now()));
   return ready.length ? ready : c;   // hammasi "dam olayotgan" bo'lsa ham - baribir urinib ko'ramiz
@@ -1288,7 +1291,7 @@ async function runFast(chain, stamped, send, escalate, fellBack) {
     send('source', { source: name });
     try {
       let shown = '', held = escalate;
-      const out = await streamChat(name, name === 'groq' ? cfg.GroqKey : name === 'gemini' ? cfg.GeminiKey : null, messages, t => {
+      const out = await streamChat(name, name === 'groq' ? cfg.GroqKey : name === 'gemini' ? cfg.GeminiKey : name === 'freellm' ? cfg.FreeLlmKey : null, messages, t => {
         shown += t;
         if (held) {
           // javob "[claude]" bilan boshlanishi mumkin - aniq bo'lguncha ko'rsatmay turamiz
@@ -1511,7 +1514,7 @@ ipcMain.handle('settings-get', () => ({ cfg, found: findClaude(cfg.ClaudePath), 
 ipcMain.handle('find-claude', () => findClaude(''));
 ipcMain.on('settings-save', (e, c) => {
   if (!cfg) return;
-  const keys = ['UserName', 'PetName', 'Gender', 'Outfit', 'Skin', 'Hair', 'ClaudePath', 'Model', 'Provider', 'GeminiKey', 'GroqKey', 'ClaudeKey', 'FullAccess', 'Chatty', 'Autostart', 'AutoUpdate'];
+  const keys = ['UserName', 'PetName', 'Gender', 'Outfit', 'Skin', 'Hair', 'ClaudePath', 'Model', 'Provider', 'GeminiKey', 'GroqKey', 'FreeLlmKey', 'ClaudeKey', 'FullAccess', 'Chatty', 'Autostart', 'AutoUpdate'];
   const gemBefore = cfg.GeminiKey;
   for (const k of keys) if (k in c) cfg[k] = c[k];
   if (cfg.GeminiKey !== gemBefore) cfg.GeminiKind = geminiKinds.get(cfg.GeminiKey) || '';
@@ -1654,7 +1657,19 @@ async function checkGroqKey(key) {
     return { ok: false, err: `Groq javobi: ${r.status}${msg ? ' - "' + msg.slice(0, 160) + '"' : ''}` };
   } catch (e) { return { ok: false, err: "Groq'ga ulanib bo'lmadi: " + e.message }; }
 }
-const KEY_FIELD = { gemini: 'GeminiKey', groq: 'GroqKey', claude: 'ClaudeKey' };
+async function checkFreeLlmKey(key) {
+  try {
+    const r = await fetch(FREE.freellm.url, {
+      method: 'POST', signal: AbortSignal.timeout(60000), headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+      body: JSON.stringify({ model: 'auto', messages: [{ role: 'user', content: 'Salom' }], max_tokens: 5 }),
+    });
+    if (r.ok) return { ok: true };
+    if (r.status === 401 || r.status === 403) return { ok: false, err: "FreeLLMAPI bu kalitni qabul qilmadi. FreeLLMAPI oynasida Kalitlar → \"Birlashtirilgan API kaliti\" dan to'liq nusxalang." };
+    if (r.status === 429 || r.status === 502 || r.status === 503) return { ok: true, warn: "Kalit to'g'ri, lekin bepul provayderlar hozir band - birozdan keyin javob beradi." };
+    return { ok: false, err: `FreeLLMAPI javobi: ${r.status}` };
+  } catch (e) { return { ok: false, err: "FreeLLMAPI ga ulanib bo'lmadi. Start menyudan \"FreeLLMAPI\" ni oching (oynasi ochiq tursin) va qayta urinib ko'ring." }; }
+}
+const KEY_FIELD = { gemini: 'GeminiKey', groq: 'GroqKey', freellm: 'FreeLlmKey', claude: 'ClaudeKey' };
 ipcMain.handle('check-key', async (e, d) => {
   const which = KEY_FIELD[d && d.which] ? d.which : 'gemini';
   const key = String((d && d.key) || '').replace(/\s+/g, '');
@@ -1668,7 +1683,7 @@ ipcMain.handle('check-key', async (e, d) => {
     const exe = findClaude(cfg ? cfg.ClaudePath : '');
     if (!exe) return { ok: false, err: "Claude Code bu kompyuterda topilmadi - yuqoridagi \"O'rnatish\" tugmasini bosing." };
     r = await pingClaude(exe, claudeEnv(key));
-  } else r = which === 'groq' ? await checkGroqKey(key) : await checkGeminiKey(key);
+  } else r = which === 'groq' ? await checkGroqKey(key) : which === 'freellm' ? await checkFreeLlmKey(key) : await checkGeminiKey(key);
   r.ms = Date.now() - t0;
   if (r.ok && d.save && cfg) {
     if (which === 'gemini') setGeminiKey(key);

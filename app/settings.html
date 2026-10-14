@@ -142,6 +142,23 @@
         </div>
         <div class="res hidden" id="rGroq"></div>
       </div>
+
+      <!-- FreeLLMAPI -->
+      <div class="kr" id="krFreeLlm">
+        <div class="kh">
+          <span class="kic">🔀</span>
+          <div class="kt"><b>FreeLLMAPI kaliti <i>(ixtiyoriy)</i></b><div class="ks">Shu kompyuterdagi bepul router (Start menyudan "FreeLLMAPI" ni oching) · kalit: uning Kalitlar sahifasidagi "Birlashtirilgan API kaliti"</div></div>
+          <span class="badge" id="bFreeLlm">…</span>
+        </div>
+        <div class="kin">
+          <input id="FreeLlmKey" type="password" spellcheck="false" autocomplete="off" placeholder="FreeLLMAPI birlashtirilgan kalitini shu yerga qo'ying">
+          <button class="btn ico" id="eyeFreeLlm" title="Kalitni ko'rsatish / yashirish">👁</button>
+          <button class="btn" id="pasteFreeLlm" title="Nusxalangan kalitni qo'yish">📋 Qo'yish</button>
+          <button class="btn test" id="testFreeLlm">✅ Tekshirish</button>
+          <button class="btn ico hidden" id="delFreeLlm" title="Kalitni o'chirish">🗑</button>
+        </div>
+        <div class="res hidden" id="rFreeLlm"></div>
+      </div>
       <div class="note" style="margin:2px 4px 0">Kalitni saytdan nusxalang (Copy) → <b>📋 Qo'yish</b> → <b>✅ Tekshirish</b>. Kalit ishlasa, darhol saqlanadi va Mittivoy shu zahoti undan foydalanadi. Kalitlar faqat sizning hisobingizda, shifrlangan holda saqlanadi.</div>
     </div>
 
@@ -190,6 +207,7 @@
       <option value="claude">🧠 Hammasi Claude orqali</option>
       <option value="gemini">✨ Hammasi Gemini orqali (faqat suhbat)</option>
       <option value="groq">🚀 Hammasi Groq orqali (faqat suhbat)</option>
+      <option value="freellm">🔀 Hammasi FreeLLMAPI orqali (faqat suhbat)</option>
       <option value="bepul">🆓 Kalitsiz bepul server (faqat suhbat)</option>
     </select>
     <div class="note">Aqlli rejimda oddiy gap-so'z, hol-ahvol va hazillarga Gemini darhol javob beradi. Dastur ochish, Telegram'ga yozish, fayllar, hisob-kitob, algoritm, kod va internetdan ma'lumot kerak bo'lsa - Claude o'zi kompyuterda bajaradi. Gemini kaliti bo'lmasa, suhbat kalitsiz bepul serverda bo'ladi.</div>

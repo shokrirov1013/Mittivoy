@@ -84,7 +84,7 @@
   });
 
   // API kalitlar (Gemini, Groq, Claude): qo'yish -> tekshirish -> (ishlasa) darhol saqlash
-  const KEYS = { Gemini: { id: 'GeminiKey', which: 'gemini' }, Groq: { id: 'GroqKey', which: 'groq' }, ClaudeKey: { id: 'ClaudeKey', which: 'claude' } };
+  const KEYS = { Gemini: { id: 'GeminiKey', which: 'gemini' }, Groq: { id: 'GroqKey', which: 'groq' }, FreeLlm: { id: 'FreeLlmKey', which: 'freellm' }, ClaudeKey: { id: 'ClaudeKey', which: 'claude' } };
   const mask = k => k.length > 12 ? k.slice(0, 6) + '…' + k.slice(-4) : '…';
   function keyIdle(name) {
     const k = $(KEYS[name].id).value.trim(), saved = (c[KEYS[name].id] || '') === k && !!k;
@@ -191,7 +191,7 @@
     $('cancel').textContent = 'Chiqish';
   }
 
-  for (const k of ['UserName', 'PetName', 'ClaudePath', 'GroqKey', 'GeminiKey']) $(k).value = c[k] || '';
+  for (const k of ['UserName', 'PetName', 'ClaudePath', 'GroqKey', 'FreeLlmKey', 'GeminiKey']) $(k).value = c[k] || '';
   for (const k of ['Skin', 'Hair', 'Provider']) $(k).value = c[k] || $(k).options[0].value;
   for (const k of ['FullAccess', 'Chatty', 'Autostart']) $(k).checked = !!c[k];
   $('AutoUpdate').checked = c.AutoUpdate !== false;
@@ -248,7 +248,7 @@
       $('subtitle').style.color = '#C62828';
       return;
     }
-    for (const k of ['ClaudePath', 'GroqKey', 'GeminiKey', 'ClaudeKey']) c[k] = $(k).value.replace(/\s+/g, '');
+    for (const k of ['ClaudePath', 'GroqKey', 'FreeLlmKey', 'GeminiKey', 'ClaudeKey']) c[k] = $(k).value.replace(/\s+/g, '');
     for (const k of ['Skin', 'Hair', 'Provider']) c[k] = $(k).value;
     for (const k of ['FullAccess', 'Chatty', 'Autostart', 'AutoUpdate']) c[k] = $(k).checked;
     api.settingsSave(c);

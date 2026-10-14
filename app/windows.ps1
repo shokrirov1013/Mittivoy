@@ -41,7 +41,8 @@ while ($true) {
     }
     # to'liq ro'yxat
     if ($sw.ElapsedMilliseconds -ge $nextFull) {
-        $nextFull = $sw.ElapsedMilliseconds + 450
+        # qahramon oynada o'tirmagan paytda ro'yxat kamroq so'raladi - UI Automation protsessorni ko'p yeydi
+        $nextFull = $sw.ElapsedMilliseconds + $(if ($focus) { 450 } else { 1000 })
         try {
             $list = New-Object System.Collections.ArrayList
             $wins = $A::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $cond)
@@ -61,5 +62,5 @@ while ($true) {
             if ($json -ne $last -or $n % 10 -eq 0) { $out.WriteLine($json); $out.Flush(); $last = $json }
         } catch {}
     }
-    Start-Sleep -Milliseconds 12
+    Start-Sleep -Milliseconds $(if ($focus) { 12 } else { 40 })
 }

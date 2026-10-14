@@ -673,9 +673,11 @@
 
   // Moslashuvchan kadr tezligi: harakatda silliq, tinch holatda tejamkor (protsessorni kam band qiladi).
   const BUSY_MODES = ['walk', 'run', 'chase', 'ball', 'dance', 'laugh', 'wave', 'cry', 'stomp', 'dizzy', 'trip', 'stretch', 'yawn', 'shy', 'land', 'crouch', 'bubbles'];
-  // Kadr tezligi: monitor chastotasida (60/90/120/144 Hz) - cheklovsiz. Faqat uxlab yotganda tejamkor.
+  // Kadr tezligi: harakatda monitor chastotasida (60/90/120/144 Hz) - silliq; tinch turganda 30, uxlaganda 20 (protsessorni tejaydi).
   function fpsTarget() {
-    if (S.mode === 'sleep' && !S.air && !S.dragging && now() - (S.lastWinMove || 0) > 1000) return 20;
+    const still = !S.air && !S.dragging && now() - (S.lastWinMove || 0) > 1000;
+    if (S.mode === 'sleep' && still) return 20;
+    if (still && !BUSY_MODES.includes(S.mode)) return 30;
     return 1000;
   }
   let last = performance.now();
@@ -741,7 +743,7 @@
   let reqId = 0, cur = null;
   const TOOL = { start: 'ishga kirishdim', Bash: 'buyruq bajaryapman', PowerShell: 'buyruq bajaryapman', Read: "faylni o'qiyapman", Write: 'fayl yozyapman', Edit: 'faylni tahrirlayapman',
     WebSearch: 'internetdan izlayapman', WebFetch: "sahifani o'qiyapman", Glob: 'fayllarni qidiryapman', Grep: 'fayllarni qidiryapman', TodoWrite: 'rejalashtiryapman' };
-  const SRC = { claude: '🧠 Claude', groq: '🚀 Groq', gemini: '✨ Gemini', bepul: '🆓 bepul server', tez: '⚡ tezkor' };
+  const SRC = { claude: '🧠 Claude', groq: '🚀 Groq', gemini: '✨ Gemini', freellm: '🔀 FreeLLMAPI', bepul: '🆓 bepul server', tez: '⚡ tezkor' };
 
   function clean(raw, partial) {
     let t = String(raw || '');
