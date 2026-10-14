@@ -1,4 +1,4 @@
-MITTIVOY 2.6 - o'zbekcha AI yordamchi (Windows uchun)
+MITTIVOY 2.6.1 - o'zbekcha AI yordamchi (Windows uchun)
 =====================================================
 
 Ekraningizda yashaydigan kichkina qizaloq yoki bolakay: sayr qiladi, oynalar ustiga chiqib

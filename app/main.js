@@ -77,7 +77,7 @@ function cleanupOldKichkintoy() {
 }
 
 // ===================================================================== o'zini o'rnatish / o'chirish (tayyor ilova rejimi)
-const VERSION = '2.6';
+const VERSION = '2.6.1';
 const INSTALL_DIR = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Mittivoy');
 const PACKAGED = !process.defaultApp;                       // resources\app ichidan ishlayapti
 const EXE_DIR = path.dirname(process.execPath);
@@ -1185,8 +1185,13 @@ ipcMain.on('logout', () => logout());
 
 // kirish oynasi
 ipcMain.handle('auth-state', () => {
+  // "davom etish" faqat serverdagi (bulutli) hisob uchun; eski mahalliy hisob serverda yo'q -
+  // uning ismi va emailini ro'yxatdan o'tish oynasiga oldindan qo'yamiz (qahramon va xotira keyin o'tkaziladi)
   const r = rememberedProfile();
-  return { remembered: r && r.email ? r : null, google: !!googleConfig(), cloud: true };
+  const p = r && appState.profiles.find(x => x.id === r.id);
+  const legacyP = appState.profiles.filter(x => !x.cloud).pop();
+  const legacy = legacyP ? { name: legacyP.name || '', email: legacyP.email || '', pet: (readJson(path.join(DATA, 'profiles', legacyP.id, 'config.json'), {}).PetName) || '' } : null;
+  return { remembered: p && p.cloud && r.email ? r : null, legacy, google: !!googleConfig(), cloud: true };
 });
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 async function cloudSignIn(email, pin) {
@@ -1223,7 +1228,7 @@ ipcMain.handle('auth-resend', async (e, email) => {
 ipcMain.handle('auth-recover', async (e, email) => {
   email = String(email || '').trim().toLowerCase();
   if (!EMAIL_RE.test(email)) return { ok: false, err: 'Avval emailingizni yozing' };
-  try { await cloud.recover(email); return { ok: true, msg: `${email} manziliga parolni tiklash havolasi yuborildi ✉️. Havolani bosib, yangi parol qo'ying, so'ng shu yerda kiring.` }; }
+  try { await cloud.recover(email); return { ok: true, msg: `Agar ${email} bilan hisob mavjud bo'lsa, unga parolni tiklash havolasi yuborildi ✉️ ("Spam" papkasini ham tekshiring). Havolani bosib, yangi parol qo'ying, so'ng shu yerda kiring. Hisobingiz bo'lmasa - "Ro'yxatdan o'tish"ni bosing.` }; }
   catch (err) { return { ok: false, err: err.message }; }
 });
 ipcMain.handle('auth-google', async () => {

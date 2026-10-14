@@ -10,11 +10,13 @@ const ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZ
 const AUTH_PAGE = 'https://shokrirov1013.github.io/Mittivoy/auth.html';
 
 const ERR_UZ = [
-  [/invalid login credentials/i, "Email yoki parol noto'g'ri"],
+  [/invalid login credentials/i, "Email yoki parol noto'g'ri. Serverda hali hisobingiz bo'lmasa - avval \"Ro'yxatdan o'tish\"ni bosing."],
   [/email not confirmed/i, "Emailingiz hali tasdiqlanmagan. Pochtangizdagi xatdagi havolani bosing (\"Spam\" papkasini ham tekshiring)."],
   [/user already registered|already been registered/i, "Bu email bilan hisob allaqachon bor - \"Kirish\" orqali kiring"],
   [/password should be at least (\d+)/i, m => `Parol kamida ${m[1]} ta belgidan iborat bo'lsin`],
   [/weak.?password|password is too weak/i, "Parol juda oddiy - harf va raqamlardan iborat uzunroq parol tanlang"],
+  [/email address not authorized|not authorized|error sending (confirmation|recovery|magic link)? ?email/i,
+    "Bu emailga xat yuborib bo'lmadi: server hozircha faqat loyiha egasining emailiga xat yubora oladi (pochta/SMTP sozlanmagan). Loyiha egasining emaili bilan ro'yxatdan o'ting yoki SMTP ulanishini kuting."],
   [/rate limit|too many|security purposes/i, "Juda ko'p urinish bo'ldi. Bir oz kutib, qayta urinib ko'ring."],
   [/unable to validate email|invalid email|email address .* is invalid/i, "Email noto'g'ri yozilgan"],
   [/fetch failed|network|ENOTFOUND|ECONN|timeout/i, "Internetga ulanib bo'lmadi. Aloqani tekshirib, qayta urinib ko'ring."],

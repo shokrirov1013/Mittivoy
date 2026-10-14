@@ -110,5 +110,13 @@
   $('rForgot').addEventListener('click', forgot('rErr', () => me && me.email));
   $('sForgot').addEventListener('click', forgot('sErr', () => $('sEmail').value.trim()));
 
-  show(me ? 'vRemember' : 'vSignup');
+  if (me) show('vRemember');
+  else if (st.legacy) {
+    // eski (faqat shu kompyuterdagi) hisob bor - serverda bir marta ro'yxatdan o'tish kerak
+    show('vSignup');
+    $('uName').value = st.legacy.name; $('uEmail').value = st.legacy.email;
+    say('uErr', `Hisoblar endi serverda saqlanadi. Eski hisobingiz faqat shu kompyuterda edi - bir marta ro'yxatdan o'ting (yangi parol o'ylab toping).` +
+      (st.legacy.pet ? ` ${st.legacy.pet} va uning xotirasi yangi hisobingizga o'tkaziladi.` : ''), true);
+    setTimeout(() => (st.legacy.email ? $('uPin') : $('uEmail')).focus(), 80);
+  } else show('vSignup');
 })();
